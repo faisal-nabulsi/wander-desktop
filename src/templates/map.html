@@ -282,6 +282,27 @@ body.dark-mode .modal-footer button {
 
 </div>
 
+  <!-- ===== Account / Pro unlock (scoped: wacct-) ===== -->
+  <div class="mb-3" id="wtheme-account">
+    <div class="wtheme-card-title">Account</div>
+    <!-- Signed-out state -->
+    <div id="wacctOut">
+      <div class="wacct-row">
+        <span class="wacct-status">Not signed in</span>
+        <button type="button" class="btn btn-primary pl-4 pr-4" id="wacctOpen">Unlock Pro / Sign in</button>
+      </div>
+    </div>
+    <!-- Signed-in state -->
+    <div id="wacctIn" style="display:none;">
+      <div class="wacct-row">
+        <span class="wacct-email" id="wacctEmail" title=""></span>
+        <button type="button" class="btn btn-outline-primary" id="wacctSignout">Sign out</button>
+      </div>
+      <div class="wacct-plan" id="wacctPlan"></div>
+    </div>
+  </div>
+
+
 
 	<!-- Connect Device -->
 {% if error_messages %}
@@ -2666,6 +2687,25 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     </div>
 </div>
 
+<!-- ===== Account / Pro sign-in sheet (scoped: wacct-) ===== -->
+<div class="wacct-overlay" id="wacctOverlay" aria-hidden="true">
+  <div class="wacct-sheet" role="dialog" aria-modal="true" aria-labelledby="wacctSheetTitle">
+    <div class="wacct-sheet-head">
+      <h4 id="wacctSheetTitle">Unlock Wander Pro</h4>
+      <button type="button" class="wacct-sheet-close" id="wacctClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="wacct-sheet-body">
+      <label class="wacct-lbl" for="wacctEmailIn">Email</label>
+      <input class="wacct-in" id="wacctEmailIn" type="email" autocomplete="email" placeholder="you@example.com">
+      <label class="wacct-lbl" for="wacctPassIn">Password</label>
+      <input class="wacct-in" id="wacctPassIn" type="password" autocomplete="current-password" placeholder="Your password">
+      <div class="wacct-err" id="wacctErr"></div>
+      <button type="button" class="wacct-btn" id="wacctSignin">Sign in</button>
+      <button type="button" class="wacct-btn ghost" id="wacctCreate">Create account</button>
+      <p class="wacct-note">Bought on wanderspoofer.com? Sign in here to unlock Pro.</p>
+    </div>
+  </div>
+</div>
 
 <div class="modal fade" id="developerModeModal" tabindex="-1" role="dialog" aria-labelledby="devModalLabel" aria-hidden="true">
     <div class="modal-dialog" role="document">
@@ -3006,6 +3046,42 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   .wmode-msg.ok{color:#1a9e57}
   .wmode-msg.err{color:#e63946}
   .wmode-pick{font-size:11px;color:#2f6bff;font-weight:600;margin-bottom:8px;min-height:14px}
+
+  /* ---- Account card + sign-in sheet (scoped: wacct-) ---- */
+  .wacct-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .wacct-status{font-size:13px;color:var(--w-muted)}
+  .wacct-email{font-size:13px;font-weight:600;color:var(--w-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .wacct-plan{margin-top:8px;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+    display:inline-block;background:linear-gradient(135deg,#1a9e57,#0f7a41);color:#fff;border-radius:8px;padding:3px 9px}
+  .wacct-plan.free{background:#eef0f3;color:#6b7280}
+  body.dark-mode .wacct-plan.free{background:#243244;color:#aebccb}
+
+  .wacct-overlay{position:fixed;inset:0;z-index:20000;display:none;align-items:center;justify-content:center;
+    background:rgba(10,20,35,.48);padding:18px}
+  .wacct-overlay.open{display:flex}
+  .wacct-sheet{width:340px;max-width:calc(100vw - 36px);background:var(--w-card);border-radius:var(--w-radius);
+    box-shadow:var(--w-shadow);font-family:var(--w-font);overflow:hidden}
+  body.dark-mode .wacct-sheet{background:#18222f;color:#e8eef5}
+  .wacct-sheet-head{display:flex;align-items:center;justify-content:space-between;
+    background:linear-gradient(135deg,var(--w-brand),var(--w-brand-2));color:#fff;padding:14px 16px}
+  .wacct-sheet-head h4{margin:0;font-size:15px;font-weight:700}
+  .wacct-sheet-close{border:none;background:transparent;color:#fff;font-size:22px;line-height:1;cursor:pointer;opacity:.9}
+  .wacct-sheet-close:hover{opacity:1}
+  .wacct-sheet-body{padding:16px}
+  .wacct-lbl{display:block;font-size:11px;font-weight:600;color:var(--w-muted);margin-bottom:4px;
+    text-transform:uppercase;letter-spacing:.03em}
+  .wacct-in{width:100%;box-sizing:border-box;border:1px solid var(--w-line);border-radius:var(--w-radius-sm);
+    padding:9px 11px;font-size:14px;color:var(--w-ink);margin-bottom:11px;background:#fff}
+  .wacct-in:focus{outline:none;border-color:var(--w-brand);box-shadow:0 0 0 3px rgba(24,95,165,.14)}
+  body.dark-mode .wacct-in{background:#0f1925;border-color:#2b3a4d;color:#e8eef5}
+  .wacct-err{font-size:12.5px;color:#e63946;min-height:17px;margin-bottom:8px;line-height:1.35}
+  .wacct-btn{width:100%;box-sizing:border-box;border:none;border-radius:999px;background:var(--w-brand);color:#fff;
+    font:600 14px var(--w-font);padding:10px;cursor:pointer;margin-bottom:9px;transition:filter .15s}
+  .wacct-btn:hover{filter:brightness(1.06)}
+  .wacct-btn:disabled{opacity:.6;cursor:default;filter:none}
+  .wacct-btn.ghost{background:transparent;color:var(--w-brand);border:1px solid var(--w-brand)}
+  .wacct-btn.ghost:hover{background:var(--w-brand);color:#fff;filter:none}
+  .wacct-note{font-size:12px;color:var(--w-muted);margin:6px 0 0;line-height:1.45;text-align:center}
 </style>
 
 <!-- mode toolbar relocated into #wtheme-panel (see Movement modes card) -->
@@ -3536,6 +3612,134 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     .leaflet-top.leaflet-left{top:10px; left:10px;}
   }
 </style>
+
+<!-- ===== Wander Account / Pro entitlement (Firebase, scoped: wacct-) ===== -->
+<!-- Loads the Firebase v10.12.2 modular SDK from the gstatic CDN (same as the -->
+<!-- website). pywebview has internet. Only the PUBLIC web config is embedded. -->
+<!-- Unlock path: onAuthStateChanged -> read Firestore licenses/{uid} (fallback  -->
+<!-- licenses/{lowercased-email}) -> window.wanderSetPro(plan === "pro").          -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+           onAuthStateChanged, signOut }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, doc, getDoc }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  // Public Firebase web config (safe to embed) — same project as wanderspoofer.com.
+  const firebaseConfig = {
+    apiKey: "AIzaSyDm9w7mIq0AinaCAj1mDGPqxpkyfkxHCEs",
+    authDomain: "wanderspoofer.firebaseapp.com",
+    projectId: "wanderspoofer",
+    storageBucket: "wanderspoofer.firebasestorage.app",
+    messagingSenderId: "537670730528",
+    appId: "1:537670730528:web:aef337867163d701984d45"
+  };
+
+  const app  = initializeApp(firebaseConfig);
+  const auth = getAuth(app);               // default persistence keeps session across launches
+  const db   = getFirestore(app);
+
+  // ---- small DOM helpers ----
+  const $ = (id) => document.getElementById(id);
+  const overlay  = $("wacctOverlay");
+  const errLine  = $("wacctErr");
+  const emailIn  = $("wacctEmailIn");
+  const passIn   = $("wacctPassIn");
+  const outBox   = $("wacctOut");
+  const inBox    = $("wacctIn");
+  const emailLbl = $("wacctEmail");
+  const planPill = $("wacctPlan");
+
+  function showSheet(){ if(errLine) errLine.textContent=""; overlay.classList.add("open");
+    overlay.setAttribute("aria-hidden","false"); setTimeout(()=>emailIn && emailIn.focus(),40); }
+  function hideSheet(){ overlay.classList.remove("open"); overlay.setAttribute("aria-hidden","true"); }
+  function setErr(msg){ if(errLine) errLine.textContent = msg || ""; }
+
+  // Map Firebase auth error codes to friendly copy.
+  function friendly(e){
+    const c = (e && e.code) || "";
+    if(c.includes("invalid-credential") || c.includes("wrong-password") || c.includes("user-not-found"))
+      return "Wrong email or password.";
+    if(c.includes("invalid-email"))        return "That doesn't look like a valid email.";
+    if(c.includes("email-already-in-use")) return "That email already has an account — try Sign in.";
+    if(c.includes("weak-password"))        return "Password should be at least 6 characters.";
+    if(c.includes("too-many-requests"))    return "Too many attempts. Wait a moment and try again.";
+    if(c.includes("network"))              return "Network error. Check your connection and retry.";
+    return (e && e.message) ? e.message : "Something went wrong. Please try again.";
+  }
+
+  // ---- control wiring ----
+  $("wacctOpen").addEventListener("click", showSheet);
+  $("wacctClose").addEventListener("click", hideSheet);
+  overlay.addEventListener("click", (ev)=>{ if(ev.target === overlay) hideSheet(); });
+  document.addEventListener("keydown", (ev)=>{ if(ev.key === "Escape" && overlay.classList.contains("open")) hideSheet(); });
+  $("wacctSignout").addEventListener("click", ()=>{ signOut(auth).catch(()=>{}); });
+
+  function busy(on){
+    $("wacctSignin").disabled = on;
+    $("wacctCreate").disabled = on;
+  }
+
+  async function doAuth(fn, workingLabel){
+    const email = (emailIn.value || "").trim();
+    const pass  = passIn.value || "";
+    if(!email || !pass){ setErr("Enter your email and password."); return; }
+    setErr(""); busy(true);
+    const btn = workingLabel === "signin" ? $("wacctSignin") : $("wacctCreate");
+    const prev = btn.textContent; btn.textContent = "Please wait…";
+    try {
+      await fn(auth, email, pass);
+      hideSheet();                 // onAuthStateChanged takes over from here
+      passIn.value = "";
+    } catch(e){
+      setErr(friendly(e));
+    } finally {
+      busy(false); btn.textContent = prev;
+    }
+  }
+
+  $("wacctSignin").addEventListener("click", ()=> doAuth(signInWithEmailAndPassword, "signin"));
+  $("wacctCreate").addEventListener("click", ()=> doAuth(createUserWithEmailAndPassword, "create"));
+  passIn.addEventListener("keydown", (ev)=>{ if(ev.key === "Enter") $("wacctSignin").click(); });
+
+  // ---- entitlement check: read licenses/{uid}, fall back to licenses/{lowercased email} ----
+  async function planFor(user){
+    try {
+      const snap = await getDoc(doc(db, "licenses", user.uid));
+      if(snap.exists() && (snap.data() || {}).plan === "pro") return "pro";
+    } catch(e){ /* ignore, try email fallback */ }
+    if(user.email){
+      try {
+        const snap2 = await getDoc(doc(db, "licenses", user.email.toLowerCase()));
+        if(snap2.exists()) return (snap2.data() || {}).plan || "free";
+      } catch(e){ /* ignore */ }
+    }
+    return "free";
+  }
+
+  // ---- auth state -> UI + Pro flip ----
+  onAuthStateChanged(auth, async (user)=>{
+    if(user){
+      outBox.style.display = "none";
+      inBox.style.display  = "";
+      emailLbl.textContent = user.email || "Signed in";
+      emailLbl.title       = user.email || "";
+      planPill.textContent = "Checking…";
+      planPill.className   = "wacct-plan free";
+      const plan = await planFor(user);
+      const isPro = (plan === "pro");
+      if(typeof window.wanderSetPro === "function") window.wanderSetPro(isPro);
+      planPill.textContent = isPro ? "Pro" : "Free plan";
+      planPill.className   = isPro ? "wacct-plan" : "wacct-plan free";
+    } else {
+      outBox.style.display = "";
+      inBox.style.display  = "none";
+      emailLbl.textContent = "";
+      if(typeof window.wanderSetPro === "function") window.wanderSetPro(false);
+    }
+  });
+</script>
 
 </body>
 
