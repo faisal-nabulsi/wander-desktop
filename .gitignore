@@ -1,0 +1,11 @@
+.venv-build/
+.venv/
+venv/
+dist/
+build/
+__pycache__/
+*.pyc
+*.spec
+.DS_Store
+map.html.pre-merge*
+images/*.gif

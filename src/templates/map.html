@@ -1,0 +1,3542 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/html">
+
+<head>
+    <title>Wander</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.png') }}">
+
+    <script src="https://cdn.jsdelivr.net/npm/babel-polyfill@latest/dist/polyfill.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/whatwg-fetch@3.6.2/dist/fetch.umd.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.10.2/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-providers@2.0.0/leaflet-providers.min.js"></script>
+    <script src="https://unpkg.com/leaflet-geosearch@3.0.0/dist/geosearch.umd.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-gpx/1.7.0/gpx.min.js"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/leaflet-geojson-export@2.1.1/dist/leaflet-geojson-export.min.js"></script> -->
+    <script src='https://api.tiles.mapbox.com/mapbox.js/plugins/leaflet-omnivore/v0.3.1/leaflet-omnivore.min.js'></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-filelayer@1.2.0/src/leaflet.filelayer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-easybutton@2.4.0/src/easy-button.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-geosearch@3.0.0/dist/geosearch.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+    <link href="https://cdn.jsdelivr.net/npm/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.css" rel="stylesheet">
+    <link href="https://cdn.lineicons.com/4.0/lineicons.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/leaflet-easybutton@2.4.0/src/easy-button.min.css" rel="stylesheet">
+
+
+    <style>
+.leaflet-menu {
+    display: none;
+    position: absolute;
+    box-shadow: 0 1px 7px rgba(0,0,0,.4);
+    -webkit-border-radius: 4px;
+    border-radius: 4px;
+    padding: 4px 0;
+    background-color: #fff;
+    cursor: default;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+    z-index: 1001
+}
+
+.leaflet-menu a.leaflet-menu-item {
+    display: block;
+    color: #222;
+    font-size: 12px;
+    line-height: 20px;
+    text-decoration: none;
+    padding: 0 12px;
+    border-top: 1px solid transparent;
+    border-bottom: 1px solid transparent;
+    cursor: default;
+    outline: 0
+}
+
+.leaflet-menu a.leaflet-menu-item.over {
+    background-color: #f4f4f4;
+    border-top: 1px solid #f0f0f0;
+    border-bottom: 1px solid #f0f0f0
+}
+
+.leaflet-menu-icon {
+    margin: 2px 8px 0 0;
+    width: 16px;
+    height: 16px;
+    float: left;
+    border: 0
+}
+
+        #map {
+            width: 100%;
+            height: 500px;
+            max-height: 70vh;
+        }
+
+        .coordinates-container {
+            margin-top: 10px;
+        }
+
+        /* Dark mode styles */
+        body.dark-mode {
+            background-color: #222; /* Darker background color for main page */
+            color: #fff;
+        }
+
+
+        body.dark-mode div[class="p-3 px-md-4 mb-3 bg-white border-bottom box-shadow"],
+        body.dark-mode select[class="custom-select"],
+        body.dark-mode select[class="custom-select d-block w-100"],
+        body.dark-mode input[type="option"],
+        body.dark-mode input[class="form-control"],
+        body.dark-mode #border,
+        body.dark-mode .collapse textarea,
+        body.dark-mode textarea {
+            background-color: #333; /* Dark background color for text inputs in dark mode */
+            color: #fff; /* Light text color for text inputs in dark mode */
+            border-color: #666; /* Dark border color for text inputs in dark mode */
+        }
+
+body.dark-mode #border.dark-mode-bg {
+        background-color: #222; /* Darker background color for main page in dark mode */
+        border-color: #666; /* Dark border color for the container in dark mode */
+    }
+
+    body.dark-mode #border.dark-mode-bg .box-shadow {
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.2); /* Dark shadow for the container in dark mode */
+    }
+
+    /* Dark mode toast styles */
+body.dark-mode .toast {
+    background-color: #333; /* Dark background color for toast */
+    color: #fff; /* Light text color for toast in dark mode */
+}
+
+body.dark-mode .toast-header {
+    background-color: #555; /* Dark background color for toast header */
+    color: #fff; /* Light text color for toast header in dark mode */
+}
+
+body.dark-mode .toast-header .close {
+    color: #fff; /* Light close icon color for toast in dark mode */
+}
+
+body.dark-mode .toast-body {
+    background-color: #333; /* Dark background color for toast body */
+    color: #fff; /* Light text color for toast body in dark mode */
+}
+/* Dark mode modal styles */
+body.dark-mode .modal-content {
+    background-color: #333; /* Dark background color for modal content */
+    color: #fff; /* Light text color for modal content in dark mode */
+}
+
+body.dark-mode .modal-header {
+    background-color: #555; /* Dark background color for modal header */
+    color: #fff; /* Light text color for modal header in dark mode */
+    border-bottom: 1px solid #666; /* Dark border color for modal header in dark mode */
+}
+
+body.dark-mode .modal-body {
+    background-color: #333; /* Dark background color for modal body */
+    color: #fff; /* Light text color for modal body in dark mode */
+}
+
+body.dark-mode .modal-footer {
+    background-color: #333; /* Dark background color for modal footer */
+    color: #fff; /* Light text color for modal footer in dark mode */
+    border-top: 1px solid #666; /* Dark border color for modal footer in dark mode */
+}
+
+body.dark-mode .modal-header .close {
+    color: #fff; /* Light close icon color for modal in dark mode */
+}
+
+body.dark-mode .modal-footer button {
+    color: #fff; /* Light button text color for modal footer in dark mode */
+    background-color: #555; /* Dark button background color for modal footer in dark mode */
+    border-color: #555; /* Dark border color for buttons in modal footer in dark mode */
+}
+.marker-menu {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    padding: 10px;
+    background-color: white;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.menu-item {
+    background-color: #f8f9fa;
+    border: none;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+}
+
+.menu-item:hover {
+    background-color: #e9ecef;
+}
+/* Adjust the styling of the custom button to remove any outlines */
+.leaflet-control-filelayer .leaflet-control-filelayer-custom {
+    outline: none !important; /* Remove any outline */
+    border: none !important; /* Remove any border */
+    box-shadow: none !important; /* Remove any box-shadow */
+}
+
+/* Add margin to each button except for the last one */
+.leaflet-control-filelayer-custom {
+    margin-bottom: 1px; /* Adjust the margin as needed */
+}
+
+/* Remove margin from the last button */
+.leaflet-control-filelayer-custom:first-child {
+    margin-top: 1px;
+}
+
+/* Add a bottom border to each button except for the last one */
+.leaflet-control-filelayer-custom:not(:last-child) {
+    border-bottom: 1px solid gray;
+}
+.leaflet-control-filelayer .leaflet-control-send-gpx1 {
+    outline: none !important; /* Remove any outline */
+    border: none !important; /* Remove any border */
+    box-shadow: none !important; /* Remove any box-shadow */
+}*/
+.custom-popup-content {
+        width: 300px; /* Adjust the width as needed */
+    }
+.time-to-next-point-control-container {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+}
+/* Hide EasyButton containers */
+.leaflet-bar.easy-button-container.leaflet-control {
+    display: none;
+}
+/* Custom CSS to make layer control button smaller */
+.leaflet-control-layers-toggle {
+    width: 10px; /* Adjust width as needed */
+    height: 10px; /* Adjust height as needed */
+    font-size: 8px; /* Adjust font size as needed */
+    padding: 4px; /* Adjust padding as needed */
+}
+
+    </style>
+</head>
+
+<body>
+  {% if version_message %}
+        <div class="alert alert-warning" role="alert">
+            {{ version_message }}
+        </div>
+    {% endif %}
+
+  {% if github_broadcast %}
+    <div class="alert alert-info" role="alert">
+        {{ github_broadcast }}
+    </div>
+    {% endif %}
+
+{% if timeout_message %}
+        <div class="alert alert-warning" role="alert">
+            {{ timeout_message }}
+        </div>
+    {% endif %}
+    {% if error_message %}
+        <div class="alert alert-danger" role="alert">
+            {{ error_message }}
+        </div>
+    {% endif %}
+<p><br></p>
+
+<div id="wtheme-topbar" class="d-flex flex-column align-items-center flex-md-row container">
+    <h4 class="my-0 font-weight-normal"><img class="wtheme-brandmark" src="{{ url_for('static', filename='wander-mark.png') }}" alt="Wander"><span class="wtheme-brandtext">Wander<span class="wtheme-brandsub">Your location, anywhere</span></span></h4>
+    <div class="wtheme-top-actions">
+        <label class="wtheme-dark form-check form-switch" title="Toggle dark mode">
+            <input class="form-check-input" type="checkbox" role="switch" id="darkModeSwitch" onchange="toggleDarkMode()">
+        </label>
+        <a id="about-btn" class="btn btn-outline-primary pl-4 pr-4" href="#" title="Wander" style="display: none;">About</a>
+        <a id="exit-btn" class="btn btn-outline-primary" href="#" title="Wander" onclick="exitApp()">Exit</a>
+    </div>
+</div>
+
+
+
+<div id="wtheme-panel" class="container">
+<!--    <div class="p-3 px-md-4 mb-3 bg-white border-bottom box-shadow dark-mode-bg"  id="border">-->
+    <div class="p-3 px-md-4 mb-3 border-bottom box-shadow dark-mode-bg"  id="border">
+
+</div>
+
+
+	<!-- Connect Device -->
+{% if error_messages %}
+  <div id="wtheme-connect">
+    <div class="wtheme-card-title">Device</div>
+    <button type="button" class="btn btn-primary pl-4 pr-4" id="connect" onclick="connectDevice()" disabled>
+        <span id="connectText">Connect Device</span>
+    </button>
+  </div>
+{% else %}
+  <div id="wtheme-connect">
+    <div class="wtheme-card-title">Device</div>
+    <br>
+      <form>
+    <div class="mb-3">
+        <label for="device">Select Device:</label><br>
+        <div class="row">
+            <div class="col">
+                <select class="custom-select d-block w-100" id="device" required>
+                </select>
+            </div>
+            <div class="col-md-auto">
+                <button type="button" class="btn btn-primary pl-4 pr-4" id="refresh" onclick="populateDeviceList()">Refresh</button>
+            </div>
+        </div>
+    </div>
+</form>
+
+
+
+    <!-- Keeping this code for the connection details drop down list, but hiding it. Not really required, but handy for debugging -->
+<div class="mb-3" style="display: none;">
+    <label for="connection">Connection:</label><br>
+    <div class="row">
+        <div class="col">
+            <select class="custom-select d-block w-100" id="connection" required>
+            </select>
+        </div>
+    </div>
+</div>
+
+<button type="button" class="btn btn-primary pl-4 pr-4" id="connect" onclick="connectDevice()">
+    <span id="connectText">Connect Device</span>
+    <span id="spinner" class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none;"></span>
+</button>
+
+<button type="button" class="btn btn-danger pl-4 pr-4" id="disconnect" onclick="disconnectDevice()" style="display: none;">
+    Disconnect
+</button>
+
+
+    <!-- Add this input element with ID "rsdData" -->
+<input class="form-control" type="text" id="rsdData" placeholder="RSD Data…" readonly style="display: none;">  <!-- Initially hidden -->
+  </div>
+{% endif %}
+
+<p></p>
+    <form>
+
+	<div id="dataList" class="mb-3"></div>
+        </form>
+	<div id="map"></div>
+
+<script>
+//=========================== leaflet menu ====================
+L.Control.LeafletMenu = L.Control.extend({
+    options: {
+        mapId: "map",
+        items: [],
+        button: void 0
+    },
+    statics: {
+        CLASS: "leaflet-menu",
+        OverFlow_Y: "overflow-y",
+        OverFlow_X: "overflow-x"
+    },
+    initialize: function(a, b) {
+        L.setOptions(this, b),
+        this.map = a,
+        this.menuItem = [],
+        this.menu_div = L.DomUtil.create("div", "menu", document.getElementById(this.options.mapId)),
+        this.container(),
+        L.DomEvent.on(this.container, "click", this._onMouseClick, this).on(this.container, "mouseover", this._onMouseOver, this).on(this.container, "mouseout", this._onMouseOut, this).on(this.container, "mousewheel", L.DomEvent.stop).on(this.container, "mousedown", L.DomEvent.stop).on(this.container, "dblclick", L.DomEvent.stop).on(this.container, "contextmenu", L.DomEvent.stop).on(window, "click", this.hide, this)
+    },
+    container: function() {
+        return this.container = L.DomUtil.create("div", L.Control.LeafletMenu.CLASS, this.menu_div),
+        this.container.style.position = "absolute",
+        this.container.style.OverFlow_Y = "auto",
+        this.container.style.OverFlow_X = "hidden",
+        this
+    },
+    createMenu: function() {
+    var button = L.DomUtil.get("styles-menu"); // Get the button itself
+    if (!button) {
+        console.error("Button not found");
+        return; // Exit if the button is not found
+    }
+
+    var buttonRect = button.getBoundingClientRect(); // Get the bounding rectangle of the button
+
+    // Get the map container or a container element positioned relative to the map
+    var mapContainer = document.querySelector('.leaflet-container');
+    if (!mapContainer) {
+        console.error("Map container not found");
+        return; // Exit if the map container is not found
+    }
+
+    // Adjust the position of the menu based on the button's position relative to the map
+    var offset = 2; // Adjust this value as needed
+    var menuLeft = buttonRect.right - mapContainer.getBoundingClientRect().left + offset; // Position the menu just to the right of the button with an offset
+    var menuTop = buttonRect.top - mapContainer.getBoundingClientRect().top; // Align the top of the menu with the bottom of the button
+
+    // Set the position of the menu relative to the map container
+    this.container.style.position = 'absolute';
+    this.container.style.left = menuLeft + 'px';
+    this.container.style.top = menuTop + 'px';
+
+    // Rest of the code remains the same
+    this._removeItems()._createItems();
+
+    return this;
+},
+    removeMenu: function() {
+        for (; this.menu_div.firstChild; )
+            this.menu_div.removeChild(this.menu_div.firstChild)
+    },
+    _createItems: function() {
+        for (var a = this.options.items, b = Object.keys(a), c = 0; c <= b.length - 1; c++)
+            if (this.menuItem[c] = L.DomUtil.create("a", "leaflet-menu-item", this.container),
+            this.menuItem[c].text = b[c],
+            a[b[c]].onClick) {
+                if (a[b[c]].onClick && a[b[c]].href)
+                    throw "Menu item could not be clickable and redirectable at the same time"
+            } else
+                this.menuItem[c].href = a[b[c]].href;
+        return this
+    },
+    _removeItems: function() {
+        for (; this.container.firstChild; )
+            this.container.removeChild(this.container.firstChild);
+        return this
+    },
+    show: function() {
+        try {
+            this.createMenu(),
+            this.container.style.display = "block",
+            this.options.button && this.options.button.state("hide-menu")
+        } catch (a) {
+            console.log("Error(show-menu): \n" + a)
+        }
+    },
+    hide: function() {
+        try {
+            this.container.style.display = "none",
+            this.options.button && this.options.button.state("show-menu")
+        } catch (a) {
+            console.log("Error(hide-menu): \n" + a)
+        }
+    },
+    _itemFunc: function(a) {
+        if (this.options.items[a].href)
+            return this;
+        if (this.target) {
+            if (!this.target || !this.target._map)
+                throw "Sorry, there could be some error with your function";
+            try {
+                this.map.removeLayer(this.target),
+                this.target = void 0
+            } catch (a) {
+                console.log("Error(Removing target): \n" + a)
+            }
+        } else
+            this.target = this.options.items[a].onClick(arguments)
+    },
+    _onMouseOver: function(a) {
+        L.DomUtil.addClass(a.target || a.srcElement, "over")
+    },
+    _onMouseOut: function(a) {
+        L.DomUtil.removeClass(a.target || a.src.Element, "over")
+    },
+    _onMouseClick: function(a) {
+        this._itemFunc(a.target.text)
+    }
+}),
+L.leafletMenu = function(a, b) {
+    return new L.Control.LeafletMenu(a,b)
+}
+;
+
+//============================ leaflet menu ======================
+
+
+
+    var map = null;
+    var marker = null;
+
+    var connectTextElement = document.getElementById('connectText');
+    var rsdDataElement = document.getElementById('rsdData');
+    var appVersionNum = "{{ app_version_num }}";
+    var appVersionType = "{{ app_version_type }}";
+    var selectedDevicePlatform = "{{ current_platform }}";
+    console.log("App Version: ", appVersionNum);
+    console.log("App Type: ", appVersionType);
+    console.log("Platform: ", selectedDevicePlatform);
+
+      // Record app_visit when the page loads
+      //document.addEventListener('DOMContentLoaded', () => recordEvent('beta_visit'));
+
+      async function recordEvent(eventName) {
+        const apiUrl = 'https://api.wander.me/';
+
+        try {
+          const response = await fetch(apiUrl + selectedDevicePlatform, {
+            mode: 'no-cors',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              path: window.location.pathname,
+              [eventName]: true,
+            }),
+          });
+
+          if (!response.ok) {
+            console.error('Failed to record event:', response.status, response.statusText);
+          }
+        } catch (error) {
+          console.error('Error recording event:', error.message);
+        }
+      }
+
+    // Function to toggle Dark Mode
+    function toggleDarkMode() {
+      // Get the Dark Mode switch element
+      var darkModeSwitch = document.getElementById("darkModeSwitch");
+
+      // Check if Dark Mode switch is checked
+      if (darkModeSwitch.checked) {
+        // Enable Dark Mode
+        document.body.classList.add("dark-mode");
+      } else {
+        // Disable Dark Mode
+        document.body.classList.remove("dark-mode");
+      }
+    }
+
+
+
+
+
+    if (connectTextElement && rsdDataElement) {
+        rsdDataElement.style.display = connectTextElement.innerText === "Connected" ? 'block' : 'none';
+    }
+
+
+
+// Global variables
+var marker; // Variable to store the marker
+var drawnItems = new L.FeatureGroup(); // Define the layer to add loaded files
+var gpxArray = []; // Array to store feature data
+var orangeIcon;
+// Define arrays to store latitudes and longitudes for markers and lines
+var markerLatLngs = [];
+var lineLatLngs = [];
+// Initialize gpxPlaybackInterval variable outside the function
+var gpxPlaybackInterval;
+// Initialize a flag variable to control the loop
+//let isPlaybackStopped = false;
+// Create a variable to keep track of playback status
+let isPlaybackInProgress = false;
+let isPlaybackStopped = true; // Flag to control playback status
+let playbackIndex = 0; // Index to keep track of the current point being processed
+// Define the gpxMarker outside the function scope
+let gpxMarker = null;
+// Define a flag to track if playback was paused
+let wasPlaybackPaused = false;
+// Flag to track whether the velocity select menu is currently visible
+var velocitySelectVisible = false;
+// Define a global variable to store the time to next point
+var timeToNextPoint = 'N/A';
+var velocitySelect = 'walk';
+let isDrawingMode = false; // Flag to track drawing mode
+
+
+// Initialize the map
+async function initializeMap(userLocale) {
+    var userLocale = "{{ user_locale }}";
+    console.log('User locale:', userLocale);
+
+    // Create the map instance after obtaining coordinates
+    map = L.map('map', {
+        keyboard: false // Disable keyboard navigation
+    });
+
+    // Create tile layers
+    var stadiaTileLayer = L.tileLayer('https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        noWrap: true,
+        attribution: '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> contributors'
+    });
+
+    var openStreetMapTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    });
+
+    var OpenStreetMap_HOT = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+	    maxZoom: 19,
+	    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Tiles style by <a href="https://www.hotosm.org/" target="_blank">Humanitarian OpenStreetMap Team</a> hosted by <a href="https://openstreetmap.fr/" target="_blank">OpenStreetMap France</a>'
+    });
+
+    var OPNVKarte = L.tileLayer('https://tileserver.memomaps.de/tilegen/{z}/{x}/{y}.png', {
+	maxZoom: 18,
+	attribution: 'Map <a href="https://memomaps.de/">memomaps.de</a> <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    });
+    var Stadia_AlidadeSmooth = L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.{ext}', {
+	minZoom: 0,
+	maxZoom: 20,
+	attribution: '&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+	ext: 'png'
+    });
+
+    var Stadia_AlidadeSmoothDark = L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.{ext}', {
+        minZoom: 0,
+        maxZoom: 20,
+        attribution: '&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        ext: 'png'
+    });
+    var Stadia_AlidadeSatellite = L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_satellite/{z}/{x}/{y}{r}.{ext}', {
+        minZoom: 0,
+        maxZoom: 20,
+        attribution: '&copy; CNES, Distribution Airbus DS, © Airbus DS, © PlanetObserver (Contains Copernicus Data) | &copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        ext: 'jpg'
+    });
+    var Stadia_Outdoors = L.tileLayer('https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}{r}.{ext}', {
+        minZoom: 0,
+        maxZoom: 20,
+        attribution: '&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        ext: 'png'
+    });
+    var Stadia_StamenToner = L.tileLayer('https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}{r}.{ext}', {
+        minZoom: 0,
+        maxZoom: 20,
+        attribution: '&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://www.stamen.com/" target="_blank">Stamen Design</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        ext: 'png'
+    });
+    var Stadia_StamenWatercolor = L.tileLayer('https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.{ext}', {
+        minZoom: 1,
+        maxZoom: 16,
+        attribution: '&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://www.stamen.com/" target="_blank">Stamen Design</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        ext: 'jpg'
+    });
+    var Stadia_StamenTerrain = L.tileLayer('https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.{ext}', {
+        minZoom: 0,
+        maxZoom: 18,
+        attribution: '&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://www.stamen.com/" target="_blank">Stamen Design</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        ext: 'png'
+    });
+    var Esri_WorldStreetMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012'
+    });
+    var Esri_WorldTopoMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), and the GIS User Community'
+    });
+    var Esri_WorldImagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+    });
+    var CartoDB_Voyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20
+    });
+
+    // Use searchLocation to get coordinates based on userLocale
+    await searchLocation(userLocale);
+
+    map.on('dblclick', handleMapDoubleClick);
+
+    // Set the zoom level to 4
+    map.setZoom(4);
+
+    // // Use Stadia Maps as the tile layer
+    // L.tileLayer('https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png', {
+    //     maxZoom: 19,
+    //     noWrap: true, // Prevent tiles from wrapping around the world
+    //     attribution: '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> contributors'
+    // }).addTo(map);
+
+
+    // Add default tile layer
+    stadiaTileLayer.addTo(map);
+
+    // Define tile layer control options
+    // Curated, de-cluttered basemap set (was 15 providers — trimmed to 6 clean options)
+    var baseLayers = {
+        "Default": stadiaTileLayer,
+        "Streets": openStreetMapTileLayer,
+        "Smooth Dark": Stadia_AlidadeSmoothDark,
+        "Satellite": Esri_WorldImagery,
+        "Outdoors": Stadia_Outdoors,
+        "Watercolor": Stadia_StamenWatercolor,
+    };
+
+    // Layer switcher: collapsed icon, top-left so it joins the zoom stack (which
+    // the theme CSS relocates to the bottom-left, clear of the top-right mode bar).
+    L.control.layers(baseLayers, null, {collapsed:true, position:'topleft'}).addTo(map);
+
+
+
+    //-----------------
+   // Leaflet.FileLayer
+// Load GPX/KML/GeoJSON files by drag and drop, or file open
+var style = {color:'orange', opacity: 1.0, fillOpacity: 0.1, weight: 2, clickable: true};
+
+// Define the orange icon
+orangeIcon = L.icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-orange.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+});
+
+L.Control.FileLayerLoad.LABEL = '<i class="lni lni-cloud-upload"></i>';
+L.Control.fileLayerLoad({
+    //layer: drawnItems,
+    position: 'topleft',
+    fitBounds: true,
+    addToMap: false, // Don't add layers to the map automatically
+    layerOptions: {
+        style: style,
+        pointToLayer: function (data, latlng) {
+            return L.marker(latlng, { icon: orangeIcon });
+        },
+        onEachFeature: onEachFeature
+    },
+    fileSizeLimit: 4096,
+    // Add the `onFileLoad` option to handle file loading
+    onFileLoad: function (e) {
+        // Do nothing here, the GPX file will not be sent automatically
+        console.log("file load trigger")
+    }
+}).addTo(map);
+
+// Add drawnItems layer to map
+map.addLayer(drawnItems);
+// Add event listener for when a file is added to the map's layer
+drawnItems.on('layeradd', function(e) {
+
+});
+
+//=================== Save icon ================
+
+// Create the draw polyline button using EasyButton
+// Create the draw polyline button using EasyButton
+var saveMapButton = L.easyButton({
+    states: [{
+        stateName: 'draw-polyline',
+        icon: '<i class="lni lni-save"></i>', // Icon class for drawing mode
+        title: 'Save File', // Tooltip for the button
+        onClick: handleSaveButtonClick // Use handleSaveButtonClick function for onClick event
+    }]
+});
+
+
+saveMapButton.button.style.fontSize = '24px'; // Adjust the font size as needed
+saveMapButton.button.style.paddingLeft = '4px';
+
+// Add the draw polyline button to the map
+saveMapButton.addTo(map);
+
+// Get the container of your existing Leaflet control
+var fileLayerControlContainer = document.querySelector('.leaflet-control-filelayer');
+
+// Add the EasyButton's container element to the existing control container
+fileLayerControlContainer.appendChild(saveMapButton.button);
+
+// Add the custom class to the EasyButton's container element
+saveMapButton.button.classList.add('leaflet-control-filelayer-custom');
+
+// Function to handle save button click
+function handleSaveButtonClick() {
+    // Prompt for filename with default folder structure
+    var filename = prompt("Please enter the filename (e.g., map_data.geojson):", "map_data.geojson");
+    if (filename != null) {
+        var data = leafletToGeoJSON();
+        downloadGeoJSON(data, filename);
+    }
+}
+
+// Function to convert Leaflet layers to GeoJSON
+function leafletToGeoJSON() {
+    var geojson = {
+        type: "FeatureCollection",
+        features: []
+    };
+
+    // Get the "drawnItems" layer group
+    var drawnItemsLayer = map.hasLayer(drawnItems) ? drawnItems : null;
+
+    // Check if the "drawnItems" layer group exists
+    if (drawnItemsLayer) {
+        drawnItemsLayer.eachLayer(function(layer) {
+            // Check if the layer is a marker
+            if (layer instanceof L.Marker) {
+                var properties = layer.feature ? layer.feature.properties : {}; // Get marker properties
+
+                geojson.features.push({
+                    type: "Feature",
+                    geometry: {
+                        type: "Point",
+                        coordinates: [layer.getLatLng().lng, layer.getLatLng().lat]
+                    },
+                    properties: properties // Add marker properties
+                });
+            }
+            // Check if the layer is a polyline
+            else if (layer instanceof L.Polyline) {
+                geojson.features.push({
+                    type: "Feature",
+                    geometry: {
+                        type: "LineString",
+                        coordinates: layer.getLatLngs().map(function(coord) {
+                            return [coord.lng, coord.lat];
+                        })
+                    },
+                    properties: {
+                        // You can add any additional properties here
+                    }
+                });
+            }
+        });
+    }
+
+    return geojson;
+}
+
+// Function to download GeoJSON file
+function downloadGeoJSON(data, filename) {
+    var blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+//==============================================
+
+
+//========== Pause / Play
+// Create the combined playback button using EasyButton
+var playbackButton = L.easyButton({
+    states: [{
+        stateName: 'play',
+        icon: '<i class="lni lni-play"></i>', // Icon class for play state
+        title: 'GPX Playback', // Tooltip for the button
+        onClick: function(btn, map) {
+            // Start GPX playback
+            console.log("play click");
+            console.log("isPlaybackStopped: ", isPlaybackStopped);
+            if (!isPlaybackStopped) {
+                console.log("play if");
+                return; // Prevent multiple playbacks
+            }
+
+            isPlaybackStopped = false; // Set playback status to active
+            console.log("before playback");
+
+            // If playback was paused, resume from the current position
+            if (wasPlaybackPaused) {
+                processNextPoint();
+            } else {
+                playbackIndex = 0; // Reset playback index
+                processNextPoint(); // Start processing points from the beginning
+            }
+
+            // Change button state to pause
+            btn.state('pause');
+        }
+    }, {
+        stateName: 'pause',
+        icon: '<i class="lni lni-pause"></i>', // Icon class for pause state
+        title: 'Pause GPX Playback', // Tooltip for the button
+        onClick: function(btn, map) {
+            // Pause GPX playback
+            isPlaybackStopped = !isPlaybackStopped; // Toggle playback status
+            if (isPlaybackStopped) {
+                console.log('Playback paused');
+                wasPlaybackPaused = true; // Set flag indicating playback was paused
+            } else {
+                console.log('Playback resumed');
+                wasPlaybackPaused = false; // Reset flag indicating playback was not paused
+                processNextPoint(); // Resume processing if playback is resumed
+            }
+
+            // Change button state back to play
+            btn.state('play');
+        }
+    }]
+});
+
+playbackButton.button.style.fontSize = '24px'; // Adjust the font size as needed
+playbackButton.button.style.paddingLeft = '4px';
+
+// Add the combined playback button to the map
+playbackButton.addTo(map);
+
+// Get the container of your existing Leaflet control
+var fileLayerControlContainer = document.querySelector('.leaflet-control-filelayer');
+
+// Add the EasyButton's container element to the existing control container
+fileLayerControlContainer.appendChild(playbackButton.button);
+
+// Add the custom class to the EasyButton's container element
+playbackButton.button.classList.add('leaflet-control-filelayer-custom');
+
+
+
+// ========= Pause Play
+
+
+
+// Create the draw polyline button using EasyButton
+var drawPolylineButton = L.easyButton({
+    states: [{
+        stateName: 'draw-polyline',
+        icon: '<i class="lni lni-travel"></i>', // Icon class for drawing mode
+        title: 'Draw Track', // Tooltip for the button
+        onClick: function(btn, map) {
+            // Toggle drawing mode
+            isDrawingMode = !isDrawingMode;
+
+            if (isDrawingMode) {
+                map.on('click', handleMapClick); // Enable drawing mode
+                btn.button.innerHTML = '<i class="lni lni-pencil"></i>'; // Change icon to pencil when drawing mode is enabled
+                btn.button.classList.add('active'); // Add active class for styling
+                map.getContainer().style.cursor = 'crosshair'; // Change cursor to crosshair
+            } else {
+                map.off('click', handleMapClick); // Disable drawing mode
+                btn.button.innerHTML = '<i class="lni lni-travel"></i>'; // Change icon back to travel when drawing mode is disabled
+                btn.button.classList.remove('active'); // Remove active class
+                map.getContainer().style.cursor = ''; // Reset cursor to default
+            }
+        }
+    }]
+});
+
+drawPolylineButton.button.style.fontSize = '24px'; // Adjust the font size as needed
+drawPolylineButton.button.style.paddingLeft = '4px';
+
+// Add the draw polyline button to the map
+drawPolylineButton.addTo(map);
+
+// Get the container of your existing Leaflet control
+var fileLayerControlContainer = document.querySelector('.leaflet-control-filelayer');
+
+// Add the EasyButton's container element to the existing control container
+fileLayerControlContainer.appendChild(drawPolylineButton.button);
+
+// Add the custom class to the EasyButton's container element
+drawPolylineButton.button.classList.add('leaflet-control-filelayer-custom');
+
+//===========
+
+// Define the validateInput function
+window.validateInput = function(input) {
+        // Get the entered value
+        var value = input.value;
+
+        // Regular expression to match the desired format
+        var regex = /^[1-9]\d{0,2}(\.\d{0,2})?$/;
+
+        // Check if the entered value matches the pattern
+        if (!regex.test(value)) {
+            // If the input doesn't match the pattern, clear the input field
+
+            input.value = '';
+        }
+    };
+
+// Define the saveCustomSpeed function
+window.saveCustomSpeed = function() {
+    // Get the entered value
+    var customSpeedInput = document.getElementById('customSpeedInput');
+    var velocitySelect = customSpeedInput.value.trim(); // Trim leading and trailing whitespace
+
+    // Check if the entered value is 0 or null or empty
+    if (velocitySelect === '0' || velocitySelect === null || velocitySelect === '') {
+        // If the value is 0 or null or empty, show an alert and return without saving
+        alert('Speed value cannot be 0 or empty.\nValue not saved!');
+        return;
+    }
+
+    // Log the velocitySelect value to console
+    console.log('VelocitySelect set to:', velocitySelect);
+
+    // Close the modal
+    var modal = new bootstrap.Modal(document.getElementById('customSpeedModal'));
+    modal.hide();
+};
+
+// Initialize menu with an empty object
+var menu = L.leafletMenu(map, {
+    items: {
+        Walk: {
+            onClick: function () {
+                velocitySelect = 'walk'; // Set velocitySelect to 'walk'
+                console.log("VelocitySelect set to:", velocitySelect);
+            },
+        },
+        Run: {
+            onClick: function () {
+                velocitySelect = 'run'; // Set velocitySelect to 'run'
+                console.log("VelocitySelect set to:", velocitySelect);
+            },
+        },
+        Ride: {
+            onClick: function () {
+                velocitySelect = 'ride'; // Set velocitySelect to 'ride'
+                console.log("VelocitySelect set to:", velocitySelect);
+            },
+        },
+        Drive: {
+            onClick: function () {
+                velocitySelect = 'drive'; // Set velocitySelect to 'drive'
+                console.log("VelocitySelect set to:", velocitySelect);
+            },
+        },
+        Custom: {
+        label: 'Custom Speed',
+        onClick: function () {
+            // Create the modal HTML
+            var modalHtml = `
+                <div class="modal fade" id="customSpeedModal" tabindex="-1" aria-labelledby="customSpeedModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="customSpeedModalLabel">Custom Speed</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="text" class="form-control" id="customSpeedInput" placeholder="Enter custom speed (Km/H) - Limit: 3 digits 2 decimals" oninput="validateInput(this)">
+
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-primary" onclick="validateInput(document.getElementById('customSpeedInput')); saveCustomSpeed();" data-bs-dismiss="modal">Save changes</button>
+                    </div>
+                    </div>
+                </div>
+                </div>`;
+
+            // Append the modal HTML to the body
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+            // Show the modal
+            var customSpeedModal = new bootstrap.Modal(document.getElementById('customSpeedModal'));
+            customSpeedModal.show();
+        }
+    }
+}
+
+});
+
+function submitCustomSpeed() {
+    var customSpeed = document.getElementById("customSpeedInput").value;
+    console.log("VelocitySelect set to:", customSpeed);
+    velocitySelect = customSpeed;
+    // Do something with the custom speed value
+
+    // Close the modal
+    var modal = new bootstrap.Modal(document.getElementById('customSpeedModal'));
+    modal.hide();
+}
+
+
+
+
+//=============
+
+// Create the dashboard button
+var dashboardButton = L.easyButton({
+    states: [{
+        stateName: 'show-menu',
+        icon: 'lni lni-dashboard',
+        title: 'Select Speed',
+        onClick: function (btn, map) {
+                    menu.options.button = btn;
+                    menu.show();
+                    btn.state('hide-menu');
+        }
+    },{
+        stateName: 'hide-menu',
+        icon: 'fa fa-tasks',
+        title: 'Hide Menu',
+        onClick: function (btn, map) {
+            menu.hide(); // Hide the menu when the button is clicked
+            btn.state('show-menu'); // Change button state to 'show-menu'
+        }
+    }],
+    id: 'styles-menu',
+});
+dashboardButton.button.style.fontSize = '24px'; // Adjust the font size as needed
+dashboardButton.button.style.paddingLeft = '4px';
+// Add the EasyButton to the map
+dashboardButton.addTo(map);
+
+// Get the container of your existing Leaflet control
+var fileLayerControlContainer = document.querySelector('.leaflet-control-filelayer');
+
+// Add the EasyButton's container element to the existing control container
+fileLayerControlContainer.appendChild(dashboardButton.button);
+
+// Add the custom class to the EasyButton's container element
+dashboardButton.button.classList.add('leaflet-control-filelayer-custom');
+
+// Create the custom button
+var customButton = L.DomUtil.create('a', 'leaflet-bar leaflet-control-zoom-in leaflet-bar-part leaflet-control-custom', document.querySelector('.leaflet-control-filelayer'));
+customButton.innerHTML = '<i class="lni lni-trash-can"></i>'; // Replace 'fa-example' with the desired icon class
+customButton.title = 'Clear markers'; // Add title for the button
+
+// Add CSS class for styling the custom button
+customButton.classList.add('leaflet-control-filelayer-custom');
+
+// Add event listener and logic for the custom button as needed
+// Function to clear GPX data
+customButton.onclick = function() {
+    drawnItems.clearLayers(); // Clear layers from map including the textbox
+    lineLatLngs = []; // Clear array storing coordinates
+    isPlaybackStopped = true; // Stop playback if active
+    playbackIndex = 0;
+    console.log("Trash: isPlaybackStopped", isPlaybackStopped);
+
+    // Hide the textbox
+    var textbox = document.getElementById('timeToPointText');
+    if (textbox) {
+        textbox.style.display = 'none';
+};
+}
+
+// Function to handle map click for drawing polyline
+function handleMapClick(event) {
+    if (!isDrawingMode) return; // Exit if not in drawing mode
+    const { lat, lng } = event.latlng; // Get latitude and longitude
+    lineLatLngs.push([lat, lng]); // Add coordinates to polyline array
+
+    // If there are at least two points, calculate route between them
+    if (lineLatLngs.length >= 2) {
+        const lastPoint = lineLatLngs.length - 2;
+        const startPoint = lineLatLngs[lastPoint];
+        const endPoint = lineLatLngs[lastPoint + 1];
+
+        // Request route between consecutive points
+        calculateRoute(startPoint, endPoint);
+    }
+}
+
+
+
+
+
+// Function to process next point in GPX data
+function processNextPoint() {
+    console.log("process next point");
+    console.log("Velocity is set to: ", velocitySelect);
+
+    if (playbackIndex >= lineLatLngs.length || isPlaybackStopped) return; // End condition
+
+    const [lat, lng] = lineLatLngs[playbackIndex]; // Get coordinates for current point
+    console.log(`Processing point ${playbackIndex + 1} of ${lineLatLngs.length}: (${lat}, ${lng})`); // Log current point
+
+    if (!gpxMarker || !map.hasLayer(gpxMarker)) {
+        // Create marker if it doesn't exist or has been removed
+        gpxMarker = L.marker([lat, lng], { icon: orangeIcon }).addTo(drawnItems);
+    } else {
+        // Update marker position
+        gpxMarker.setLatLng([lat, lng]);
+    }
+
+    setCoordinates(lat, lng); // Set coordinates
+    setLocationArrows();
+
+    //const velocity = document.getElementById('velocitySelect').value; // Get selected velocity
+    const velocity = velocitySelect;
+    const distance = playbackIndex > 0 ?
+        calculateDistance(lineLatLngs[playbackIndex - 1][0], lineLatLngs[playbackIndex - 1][1], lat, lng) :
+        0; // Calculate distance from previous point
+    timeToNextPoint = calculateTime(distance, velocity); // Update global variable with time to next point
+
+    console.log(`Time to next point: ${timeToNextPoint} seconds`); // Log time to next point
+    // Emit an event to indicate playback status change
+    map.fire('playbackchange');
+
+    // Increment index and process next point after time interval
+    setTimeout(() => {
+        playbackIndex++;
+        processNextPoint();
+    }, timeToNextPoint * 1000); // Convert time to milliseconds
+}
+
+function calculateRoute(startPoint, endPoint) {
+    // Create routing control with walking profile
+    L.Routing.control({
+        waypoints: [
+            L.latLng(startPoint[0], startPoint[1]),
+            L.latLng(endPoint[0], endPoint[1])
+        ],
+        routeWhileDragging: false, // Disable route calculation while dragging waypoints
+        lineOptions: {
+            styles: [{color: 'blue', opacity: 1, weight: 5}]
+        },
+        router: L.Routing.osrmv1({
+            serviceUrl: 'https://routing.openstreetmap.de/routed-foot/route/v1/',
+            profile: 'walking'
+        }),
+        show: false // Do not show the route on the map
+    }).on('routesfound', function(e) {
+        // Get the route from the event
+        var route = e.routes[0];
+        // Extract the coordinates from the route
+        var coordinates = route.coordinates;
+        // Draw the polyline using the coordinates
+        var polyline = L.polyline(coordinates, {color: 'blue'}).addTo(drawnItems);
+    }).addTo(drawnItems);
+}
+
+
+// Function to clear all polylines from the map
+function clearPolylines() {
+    drawnItems.clearLayers(); // Remove all layers from the drawnItems layer
+    lineLatLngs = []; // Clear the array storing coordinates
+}
+
+// Define a custom control for displaying time to next point
+var TimeToNextPointControl = L.Control.extend({
+    options: {
+        position: 'bottomleft' // Default position if not specified
+    },
+
+    onAdd: function(map) {
+        var container = L.DomUtil.create('div', 'time-to-next-point-control leaflet-bar leaflet-control');
+        var textbox = L.DomUtil.create('input');
+        textbox.type = 'text';
+        textbox.disabled = true; // Make textbox readonly
+        textbox.placeholder = 'Time to next point';
+        textbox.style.width = '200px'; // Adjust the width as needed
+        textbox.id = 'timeToPointText'; // Set ID for the textbox
+
+        container.appendChild(textbox);
+
+        // Function to update the content with the time to next point
+        function updateContent() {
+            if (!isPlaybackStopped) { // Check if playback is in progress
+                container.style.display = 'block'; // Show the control
+                textbox.value = `Time to next point: ${timeToNextPoint.toFixed(2)} seconds`;
+            } else {
+                container.style.display = 'none'; // Hide the control when playback is stopped
+            }
+        }
+
+        // Update the content initially
+        updateContent();
+
+        // Listen for changes in playback status and update the content accordingly
+        map.on('playbackchange', updateContent);
+
+        return container;
+    },
+
+    onRemove: function(map) {
+        // Remove event listener when control is removed from map
+        map.off('playbackchange');
+    }
+});
+
+// Create and add the custom control to the map with the specified position
+var timeToNextPointControl = new TimeToNextPointControl({ position: 'bottomleft' }); // Set position to bottom left
+timeToNextPointControl.addTo(map);
+
+
+// Function to send GPX file to the backend
+function sendGPXToBackend() {
+    // Get the selected file from the FileLayer control
+    var selectedFile = document.getElementById('gpxFileInput').files[0];
+    var velocity = document.getElementById('velocity').value; // Assuming you have an input field with ID 'velocity'
+
+
+    if (selectedFile) {
+        // Create a FormData object to send the file
+        var formData = new FormData();
+        formData.append('gpxFile', selectedFile);
+        formData.append('velocity', velocity);
+
+        // Send the FormData to the backend using fetch or another AJAX method
+        fetch('/upload_gpx', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.text();
+        })
+        .then(data => {
+            console.log('GPX file uploaded successfully:', data);
+        })
+        .catch(error => {
+            console.error('Error uploading GPX file:', error);
+        });
+    } else {
+        console.error('No GPX file selected.');
+    }
+}
+
+    // Assuming your input field has an id of 'coordinates'
+    var inputField = document.getElementById('coordinates');
+}
+
+
+
+// Function to create a marker with all necessary event listeners
+function createMarker(latlng) {
+    marker = L.marker(latlng, { draggable: true }).addTo(map);
+    marker.on('dragend', handleMarkerDragEnd);
+    marker.on('contextmenu', handleMarkerRightClick); // Add event listener for marker right-click
+    return marker;
+}
+
+
+// Function to create a new marker on double click
+function handleMapDoubleClick(e) {
+    // Disable double-click zooming
+    map.doubleClickZoom.disable();
+    if (!marker)
+        marker = createMarker(e.latlng); // Create a new marker
+    else
+        marker.setLatLng(e.latlng);
+
+    setCoordinates(e.latlng.lat, e.latlng.lng);
+
+    // Add the right-click event listener to the active marker
+    marker.on('contextmenu', handleActiveMarkerRightClick);
+}
+
+// Function to handle marker drag end
+function handleMarkerDragEnd(event) {
+    const newLat = event.target.getLatLng().lat;
+    const newLng = event.target.getLatLng().lng;
+    setCoordinates(newLat, newLng);
+}
+
+
+
+
+// Function to delete marker
+function deleteMarker() {
+    map.removeLayer(marker);
+    map.closePopup(); // Close the popup
+    marker = null;
+}
+
+
+// // Define global variables
+let currentFeature = null;
+let currentLayer = null;
+
+
+
+// Function to set coordinates
+function setCoordinates(lat, lng) {
+    document.getElementById('coordinates').value = lat + ', ' + lng;
+    updateSetLocationButtonStatus();
+    updateStopLocationButtonStatus(); // Add this line to update the Stop Location button status
+    fetch('/update_location', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ lat, lng }),
+    })
+        .then(response => response.text())
+        .then(data => console.log(data))
+        .catch(error => console.error('Error updating location:', error));
+}
+
+// Function to handle search
+function handleSearch() {
+    var input = document.getElementById('coordinates').value;
+    searchLocation(input);
+}
+
+// Function to search location
+async function searchLocation(input, userLocale) {
+    // Initialize the OSM provider for searching
+    var provider = new GeoSearch.OpenStreetMapProvider();
+    try {
+        const results = await provider.search({ query: input });
+        if (results.length > 0) {
+            const { x, y } = results[0];
+            if (!marker) {
+                marker = L.marker([y, x], { draggable: true }).addTo(map);
+                marker.on('dragend', handleMarkerDragEnd); // Add event listener for marker drag
+                marker.on('contextmenu', handleMarkerRightClick); // Add event listener for marker right-click
+
+            } else {
+                marker.setLatLng([y, x]);
+            }
+            map.setView([y, x], 13);
+            setCoordinates(y, x);
+        } else {
+            alert("No results found for the provided location");
+        }
+    } catch (error) {
+        console.error('Error during geocoding:', error);
+    }
+}
+
+
+// Add previously saved GeoJSON or loaded file to map, and allow editing?
+function onEachFeature(feature, layer) {
+    drawnItems.addLayer(layer); // Add the layer to the drawnItems group
+
+    // Store latlngs for lines (polylines)
+    if (layer instanceof L.Polyline) {
+                layer.getLatLngs().forEach(function(latLng) {
+                    lineLatLngs.push([latLng.lat, latLng.lng]);
+                });
+            }
+            // You can also handle other types of features if needed
+        console.log("latArray:", lineLatLngs);
+
+    // Bind a popup to the layer showing its properties
+    layer.bindPopup(generatePopupContent(feature.properties));
+
+    // Attach the click handler to display properties
+    layer.on('click', handleMarkerClick);
+
+    // Attach the right-click handler to edit properties
+    layer.on('contextmenu', function(event) {
+        handleMarkerRightClick(event, feature);
+    });
+}
+
+// Function to generate popup content for displaying all feature properties
+function generatePopupContent(properties) {
+    let content = '';
+    console.log("generate props: ", properties)
+    for (const key in properties) {
+        content = `<h4 style="text-align: center;">${properties.name}</h4>`;
+        content += `<p><strong>${key}:</strong><br>${properties[key]}<br>`;
+        content += `<p><strong>Coordinates:</strong><br> ${coordinates.value}<br>`;
+    }
+    return content;
+}
+
+
+
+// Function to handle marker right-click
+function handleMarkerRightClick(event) {
+    L.DomEvent.stopPropagation(event); // Prevent the map from handling the click event
+
+    const menu = L.popup();
+    menu.setLatLng(event.latlng);
+
+    // Set currentFeature to the feature object of the clicked marker
+    currentFeature = event.target.feature;
+
+    // Check if the event object contains the necessary properties
+    if (event.target && event.target.feature && event.target.feature.properties) {
+        let content = generateEditPopupContent(event.target.feature.properties);
+         // Style the button as a Bootstrap 5 button and center align it
+        content += '<div class="text-center">';
+        content += '<br><button type="button" id="saveActive" class="btn btn-primary" onclick="saveChanges()">Save</button>';
+        content += '</div>';
+
+        menu.setContent(content);
+        menu.openOn(map);
+    }
+}
+
+
+
+
+
+// Function to generate popup content for editing feature properties
+function generateEditPopupContent(properties) {
+    let content = '<h3>Edit Marker</h3>';
+
+    // Ensure name input is always displayed
+    content += '<label for="name"><strong>Name:</strong></label><br>';
+    content += `<input type="text" class="form-control" id="name" value="${properties.name || ''}"><br>`;
+
+    // Ensure description input is always displayed
+    content += '<br><label for="description"><strong>Description:</strong></label><br>';
+    content += `<textarea class="form-control" type="text" id="description" rows="2" value="${properties.description || ''}"></textarea><br>`;
+
+    //content += '<button onclick="saveChanges()">Save</button>';
+    //return content;
+    return `<div class="custom-popup-content">${content}</div>`;
+}
+
+// Function to save changes made to marker properties
+function saveChanges() {
+    // Check if input elements exist
+    const newNameInput = document.getElementById('name');
+    const newDescriptionInput = document.getElementById('description');
+
+    if (!newNameInput || !newDescriptionInput) {
+        console.error('Input elements not found.');
+        return;
+    }
+
+    // Verify that currentFeature is set
+    if (!currentFeature) {
+        console.error('Current feature not found.');
+        return;
+    }
+
+    // Update the feature properties
+    currentFeature.properties.name = newNameInput.value;
+    currentFeature.properties.description = newDescriptionInput.value;
+
+    // Update the marker popup content with the new properties
+    marker.setPopupContent(generatePopupContent(currentFeature));
+
+    // Close the popup
+    map.closePopup();
+}
+// Function to handle marker click
+function handleMarkerClick(event) {
+    const feature = event.target.feature;
+    const coordinates = event.latlng;
+
+    // Call setCoordinates function with marker coordinates
+    setCoordinates(coordinates.lat, coordinates.lng);
+
+    const popupContent = generatePopupContent(feature.properties);
+    const popup = L.popup().setLatLng(coordinates).setContent(popupContent);
+    map.openPopup(popup);
+}
+
+// Function to handle right-click on the active marker
+function handleActiveMarkerRightClick(event) {
+    L.DomEvent.stopPropagation(event); // Prevent the map from handling the click event
+
+    const menu = L.popup();
+    menu.setLatLng(event.latlng);
+
+    let content = generateEditPopupContent({
+        name: "",
+        description: ""
+    }); // Empty inputs for the new marker
+
+    // Style the button as a Bootstrap 5 button and center align it
+    content += '<div class="text-center">';
+    content += '<br><button type="button" id="saveActive" class="btn btn-primary" onclick="saveActiveMarker()">Save</button>';
+    content += '</div>';
+
+    menu.setContent(content);
+    menu.openOn(map);
+}
+
+
+// Function to save the active marker as a new feature in the drawnItems layer
+function saveActiveMarker() {
+    const newNameInput = document.getElementById('name');
+    const newDescriptionInput = document.getElementById('description');
+
+    if (!newNameInput || !newDescriptionInput) {
+        console.error('Input elements not found.');
+        return;
+    }
+
+    // Create a GeoJSON feature for the active marker
+    const newFeature = {
+        type: "Feature",
+        geometry: {
+            type: "Point",
+            coordinates: [marker.getLatLng().lng, marker.getLatLng().lat]
+        },
+        properties: {
+            name: newNameInput.value,
+            description: newDescriptionInput.value
+        }
+    };
+
+    // Add the new feature to the drawnItems layer
+    L.geoJSON(newFeature, {
+        pointToLayer: function(feature, latlng) {
+            return L.marker(latlng, { icon: orangeIcon });
+        },
+        onEachFeature: onEachFeature
+    }).addTo(drawnItems);
+
+    // Close the popup
+    map.closePopup();
+}
+
+function sendGPXToBackend() {
+    // Get the selected file from the file input element
+    var selectedFile = document.getElementById('gpxFileInput').files[0];
+
+    // Get the selected velocity from the dropdown
+    var velocitySelect = document.getElementById('velocitySelect');
+    var velocity = velocitySelect.value;
+
+    if (selectedFile) {
+        // Create a FormData object to send the file
+        var formData = new FormData();
+        formData.append('gpxFile', selectedFile);
+        formData.append('velocity', velocity); // Append the velocity variable
+
+        // Send the FormData to the backend using fetch or another AJAX method
+        fetch('/upload_gpx', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.text();
+        })
+        .then(data => {
+            console.log('GPX file uploaded successfully:', data);
+        })
+        .catch(error => {
+            console.error('Error uploading GPX file:', error);
+        });
+    } else {
+        console.error('No GPX file selected.');
+    }
+}
+
+//=============== GPX Playback in Javascript ==============
+
+// Function to calculate distance between two points using Haversine formula
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radius of the earth in km
+    const dLat = (lat2 - lat1) * Math.PI / 180; // deg2rad below
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+        0.5 - Math.cos(dLat) / 2 +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        (1 - Math.cos(dLon)) / 2;
+
+    return R * 2 * Math.asin(Math.sqrt(a));
+}
+
+// Function to calculate time required to travel between two points based on velocity
+function calculateTime(distance, velocity) {
+    const speed = {
+        "walk": 6,  // km/h
+        "run": 12,  // km/h
+        "ride": 20,  // km/h
+        "drive": 50  // km/h
+    };
+    const speedKmh = speed[velocity] || speed["walk"]; // Default to walking speed if velocity is not found
+
+    // Convert distance to kilometers and calculate time in seconds
+    return (distance / speedKmh) * 3600;
+}
+
+
+function simulateGPXPlayback(lineLatLngs, velocity) {
+    // Clear any existing playback interval
+    clearInterval(gpxPlaybackInterval);
+
+    // Initialize variables
+    let currentIndex = 0;
+    console.log("currentindex: ", currentIndex);
+    let activeMarker = L.marker(lineLatLngs[currentIndex], { icon: orangeIcon }).addTo(drawnItems);
+
+    // Function to move to the next point
+    function moveToNextPoint() {
+    // Increment index to move to the next point
+    currentIndex++;
+    console.log("move: currentIndex: ", currentIndex);
+    console.log("move: isPlaybackStopped: ", isPlaybackStopped);
+    console.log("move: lineLatLngs: ", lineLatLngs);
+    console.log("move: length: ", lineLatLngs.length);
+
+    // Check if playback should continue and there are more coordinates
+    if (!isPlaybackStopped && currentIndex < lineLatLngs.length) {
+        const lat = lineLatLngs[currentIndex][0];
+        const lon = lineLatLngs[currentIndex][1];
+
+        console.log("Next Coordinate - Lat:", lat, "Lon:", lon); // Log next coordinate
+
+
+        // Update marker position
+        activeMarker.setLatLng([lat, lon]);
+
+        // Calculate distance between current and next point
+        const distance = calculateDistance(lineLatLngs[currentIndex - 1][0], lineLatLngs[currentIndex - 1][1], lat, lon);
+        console.log("Distance to next point:", distance); // Log distance
+
+        // Calculate time required to travel between current and next point
+        const timeInSeconds = calculateTime(distance, velocity);
+        console.log("Time to next point:", timeInSeconds); // Log time
+
+        // Set a new interval to move to the next point after the calculated time
+        gpxPlaybackInterval = setTimeout(moveToNextPoint, timeInSeconds * 1000);
+    } else {
+        console.log("if Else no mans land")
+        // Playback finished or stopped, clear the interval
+        clearInterval(gpxPlaybackInterval);
+        // Reset playback status
+        isPlaybackInProgress = false;
+    }
+}
+
+    // Start playback
+    moveToNextPoint();
+
+    // Return the interval ID to access it outside the function
+    return gpxPlaybackInterval;
+}
+
+
+
+// Function to reset the flag variable
+function resetPlaybackFlag() {
+    isPlaybackStopped = false;
+}
+
+
+//============== GPX Playback =============================
+
+// Function to handle keyboard directional key presses
+function handleKeyDown(event) {
+    const stepSize = 0.0001; // Adjust this value as needed
+    const latLng = marker.getLatLng();
+    console.log('key down');
+    let newLatLng;
+
+    switch (event.key) {
+        case 'ArrowUp':
+            newLatLng = [latLng.lat + stepSize, latLng.lng];
+            console.log("up");
+            break;
+        case 'ArrowDown':
+            newLatLng = [latLng.lat - stepSize, latLng.lng];
+            console.log("down");
+            break;
+        case 'ArrowLeft':
+            newLatLng = [latLng.lat, latLng.lng - stepSize];
+            break;
+        case 'ArrowRight':
+            newLatLng = [latLng.lat, latLng.lng + stepSize];
+            break;
+        default:
+            return; // Do nothing if other keys are pressed
+    }
+
+    marker.setLatLng(newLatLng);
+    setLocationArrows();
+    setCoordinates(newLatLng[0], newLatLng[1]);
+
+    event.preventDefault(); // Prevent default behavior of arrow key presses
+}
+
+
+
+
+function populateDeviceList() {
+    var deviceDropdown = document.getElementById('device');
+    var connectionDropdown = document.getElementById('connection');
+    var devicesInfo = {};  // Object to store device information
+    var sudo_message = "{{ sudo_message }}";  // Ensure sudo_message is a string
+
+    // Make AJAX request to get the device list
+    fetch('/list_devices')
+        .then(response => response.json())
+        .then(data => {
+            console.log('data:', data);
+            // Clear existing options
+            deviceDropdown.innerHTML = '';
+            connectionDropdown.innerHTML = '';
+
+            // Iterate through devices (UDIDs)
+            Object.keys(data).forEach(udid => {
+                var connections = data[udid]; // Get connections for the current UDID
+
+                // Iterate over connection types for each device
+                Object.keys(connections).forEach(connectionType => {
+                    var deviceInfoArray = connections[connectionType]; // Get device info array for the current connection type
+
+                    // Iterate over device info array
+                    deviceInfoArray.forEach(deviceInfo => {
+                        var option = document.createElement('option');
+
+                        // Define the base display text
+                        let displayText = `${connectionType}: ${deviceInfo.DeviceName} - (${deviceInfo.DeviceClass} - iOS: ${deviceInfo.ProductVersion})`;
+
+                        option.text = displayText;
+                        option.value = JSON.stringify(deviceInfo);  // Convert deviceInfo object to JSON string
+
+                        // Store device information in the object
+                        devicesInfo[udid] = devicesInfo[udid] || {};
+                        devicesInfo[udid][connectionType] = deviceInfo;
+
+                        deviceDropdown.add(option);
+                    });
+                });
+            });
+
+            // Attach the devicesInfo object to the deviceDropdown for easy access later
+            deviceDropdown.devicesInfo = devicesInfo;
+
+            // Add event listener to update value attribute of options
+            deviceDropdown.addEventListener('change', function() {
+                var selectedOption = deviceDropdown.options[deviceDropdown.selectedIndex];
+                var deviceInfo = JSON.parse(selectedOption.value); // Parse the JSON string to object
+                selectedOption.value = JSON.stringify(deviceInfo); // Update the value to match the object
+            });
+
+            // Check if sudo_message has a value and invoke displayToast if it does
+            if (sudo_message) {
+                displayToast(sudo_message);
+            }
+        })
+        .catch(error => console.error('Error fetching device list:', error));
+}
+
+
+
+
+
+
+    // Define an asynchronous function to update DynamoDB
+    async function updateDynamoDB(selectedDeviceIdentifier, selectedDeviceVersion, selectedDeviceName, selectedDeviceClass, selectedDevicePlatform, appVersionNum, appType, selectedDeviceConnType, SelectedDeviceWifiState, selectedDeviceCountry) {
+
+        const apiUrl = 'https://api.wander.me/';
+
+        try {
+            const response = await fetch(apiUrl + selectedDeviceIdentifier, {
+                mode: 'no-cors',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    // Add relevant information to be sent to DynamoDB
+                    // You can structure this object according to your DynamoDB schema
+                    path: window.location.pathname,
+                    version: selectedDeviceVersion,
+                    deviceName: selectedDeviceName,
+                    deviceClass: selectedDeviceClass,
+                    platform: selectedDevicePlatform,
+                    appType: appType,
+                    appVersion: appVersionNum,
+                    connType: selectedDeviceConnType,
+                    wifiState: SelectedDeviceWifiState,
+                    country: selectedDeviceCountry,
+
+
+
+                }),
+            });
+
+            if (!response.ok) {
+
+            }
+        } catch (error) {
+
+        }
+    }
+
+
+
+
+    // Connect Device Function
+// Connect Device Function
+function connectDevice() {
+    // Display "Connecting, please wait..."
+    var connectButton = document.getElementById('connect');
+    var connectTextElement = document.getElementById('connectText');
+    var spinnerElement = document.getElementById('spinner');
+    var deviceDropdown = document.getElementById('device');
+    var selectedOptionValue = JSON.parse(document.getElementById('device').value);
+    console.log('device info:', deviceDropdown);
+    console.log('selectedOptionValue: ', selectedOptionValue);
+
+    // Extract relevant information from selectedOptionValue
+    var selectedDeviceIdentifier = selectedOptionValue.Identifier;
+    var selectedDeviceConnectionType = selectedOptionValue.ConnectionType;
+    var productVersion = selectedOptionValue.ProductVersion;
+    var deviceName = selectedOptionValue.DeviceName;
+    var deviceClass = selectedOptionValue.DeviceClass;
+    var SelectedDeviceWifiState = selectedOptionValue.wifiState;
+    var selectedDeviceName = deviceName;
+    var selectedDeviceClass = deviceClass;
+    var selectedDeviceVersion = productVersion;
+    var selectedDeviceConnType = selectedDeviceConnectionType;
+    var selectedDeviceCountry = selectedOptionValue.userLocale;
+    //var selectedDeviceWifiAddress = wifiAddress;
+    var selectedDevicePlatform = "{{ current_platform }}";
+    var appVersionNum = "{{ app_version_num }}";
+    var appType = "{{ app_version_type }}";
+
+    console.log('identifier: ', selectedDeviceIdentifier);
+    console.log('connType: ', selectedDeviceConnectionType);
+    console.log('Product Version:', productVersion);
+    console.log('Device Name:', deviceName);
+    console.log('Device Class:', deviceClass);
+    console.log('WiFi State:', SelectedDeviceWifiState);
+
+
+
+
+<!--    console.log('Connecting device:', selectedDeviceIdentifier);-->
+<!--    console.log('iOS Version:', selectedDeviceVersion);-->
+<!--    console.log('Device Name:', selectedDeviceName);-->
+<!--    console.log('Device Class:', selectedDeviceClass);-->
+<!--    console.log('Connection:', selectedDeviceConnType);-->
+<!--    console.log('Platform:', selectedDevicePlatform);-->
+<!--    console.log('App Version:', appVersionNum);-->
+<!--    console.log('wifi address:', selectedDeviceWifiAddress);-->
+
+
+    // Call the function to update DynamoDB
+    updateDynamoDB(selectedDeviceIdentifier, selectedDeviceVersion, selectedDeviceName, selectedDeviceClass, selectedDevicePlatform, appVersionNum, appType, selectedDeviceConnType, SelectedDeviceWifiState, selectedDeviceCountry);
+
+    if (connectTextElement) {
+        connectTextElement.innerText = "Connecting, please wait...";
+    }
+    // Hide the connectText and show the spinner only if not already connected
+    if (connectTextElement && spinnerElement && connectTextElement.innerText !== "Connected") {
+        connectTextElement.style.display = 'inline-block'; // Display the text
+        spinnerElement.style.display = 'inline-block'; // Display the spinner
+    }
+
+    // Make AJAX request to notify the server about the command
+    fetch('/connect_device', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            udid: selectedDeviceIdentifier,
+            ios_version: selectedDeviceVersion, // Include iOS version in the request
+            connType: selectedDeviceConnType, //connection type USB or WIFI
+            //wifiAddress: selectedDeviceWifiAddress,
+            wifiState: SelectedDeviceWifiState,
+        }),
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('connect data: ', data);
+
+
+
+        // Check if developer mode is required
+        if ('developer_mode_required' in data) {
+            // Display modal informing the user and providing options
+            showModalDeveloperModeRequired();
+            return;
+        }
+         // Check if there is an error with the message 'No Pair Record Found'
+        if ('Error' in data && data.Error === 'No Pair Record Found') {
+            // Display modal informing the user about the pair record
+            showPairRecordModal();
+            return;
+    }
+
+        // Check for the 'error' key in the response
+        if ('error' in data) {
+            // Display the error message as a popup or text on the page
+            //alert(data.error); // You can use a better UI method here
+            showModalTimeout();
+
+            // Reset connectTextElement
+            if (connectTextElement) {
+                connectTextElement.innerText = "Connect Device";
+                spinnerElement.style.display = 'none'; // Display the spinner
+            }
+
+            // Enable Connect button
+            if (connectButton) {
+                connectButton.disabled = false;
+            }
+
+            // Stop processing the rest of the JavaScript
+            return;
+        }
+
+        // code for successful response
+        var displayTextElement = document.getElementById('displayText');
+        if (displayTextElement) {
+            displayTextElement.innerText = data;
+        }
+
+        if (connectTextElement) {
+            connectTextElement.innerText = "Connected";
+        }
+
+        if (connectButton) {
+            connectButton.disabled = true;  // Disable the button
+        }
+
+        if (spinnerElement && connectTextElement.innerText === "Connected") {
+            spinnerElement.style.display = 'none'; // Hide the spinner
+        }
+
+        if (deviceDropdown) {
+            deviceDropdown.disabled = true;  // Disable the button
+        }
+
+            var containerElement = document.body;
+            var rsdDataElement = document.getElementById('rsdData');
+
+            if (containerElement && rsdDataElement) {
+                try {
+                    console.log('container data:', data);
+                    //var jsonData = JSON.parse(data);
+
+
+                    if ('rsd_data' in data) {
+                        rsdDataElement.value = data.rsd_data;
+
+                        if (connectTextElement && connectTextElement.innerText === "Connected") {
+                            //rsdDataElement.style.display = 'block';  // Make rsdData visible
+                            updateSetLocationButtonStatus();
+                            updateStopLocationButtonStatus();  // Add this line to update the Stop Location button status
+
+                            // Show the disconnect button when rsdData is visible
+                            var disconnectButton = document.getElementById('disconnect');
+                            if (disconnectButton) {
+                                disconnectButton.style.display = 'inline-block';
+                                disconnectButton.innerText = 'Disconnect';
+                            }
+                        }
+                    } else {
+                        rsdDataElement.value = 'No rsd_data found in the data';
+                    }
+                } catch (error) {
+                    console.error('Error parsing data:', error);
+                    rsdDataElement.value = 'Error parsing data';
+                }
+
+                rsdDataElement.readOnly = true;
+            }
+        })
+        .catch(error => {
+            console.error('Error connecting device:', error);
+            var displayTextElement = document.getElementById('displayText');
+            if (displayTextElement) {
+                displayTextElement.innerText = 'Error connecting device.';
+            }
+
+            if (connectTextElement) {
+                connectTextElement.innerText = "Error connecting";
+            }
+
+            if (connectButton) {
+                connectButton.disabled = false;  // Enable the button
+            }
+        });
+}
+
+
+// Function to show the modal for developer mode required
+function showModalDeveloperModeRequired() {
+    $('#developerModeRequiredModal').modal('show');
+}
+// Function to show the modal for developer mode required
+function showPairRecordModal() {
+    $('#pairRecordModal').modal('show');
+}
+
+// Function to show the modal for developer mode required
+function showModalWifiModeRequired() {
+    $('#wifiModeRequiredModal').modal('show');
+}
+
+
+    /// Function to disconnect device
+    function disconnectDevice() {
+        var connectTextElement = document.getElementById('connectText');
+        var connectButton = document.getElementById('connect');
+        var disconnectButton = document.getElementById('disconnect');
+        var deviceDropdown = document.getElementById('device');
+        stopLocation();
+        // Use navigator.sendBeacon to make the POST request without waiting for a response
+        const data = JSON.stringify({});
+        //navigator.sendBeacon('/stop_tunnel', data);
+        console.log('Disconnect - Clearing');
+
+        var setLocationButton = document.getElementById('set-location');
+        var stopLocationButton = document.getElementById('stop-location');
+        stopLocationButton.disabled = true;
+        setLocationButton.disabled = true;
+
+        // Enable the device dropdown
+        if (deviceDropdown) {
+            deviceDropdown.disabled = false;
+        }
+
+        // Update Disconnect button text and show Connect button
+        if (disconnectButton) {
+            disconnectButton.innerText = "Disconnecting, Please wait...";
+            disconnectButton.style.display = 'none';
+        }
+
+        // Hide rsdData text box
+        var rsdDataElement = document.getElementById('rsdData');
+        if (rsdDataElement) {
+            rsdDataElement.style.display = 'none';
+        }
+
+        // Reset connectTextElement
+        if (connectTextElement) {
+            connectTextElement.innerText = "Connect Device";
+        }
+
+        // Enable Connect button
+        if (connectButton) {
+            connectButton.disabled = false;
+        }
+    }
+
+
+
+
+function setLocationArrows() {
+        fetch('/set_location', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+        })
+            .then(response => response.text())
+            .then(data => {
+                //displayToast(data); // Display response as a toast
+                console.log('set_location response:', data);
+            })
+            .catch(error => {
+                console.error('Error setting location:', error);
+            });
+    }
+
+
+    function setLocation() {
+        fetch('/set_location', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+        })
+            .then(response => response.text())
+            .then(data => {
+                console.log('set_location response:', data);
+                if (window.wanderToast) {
+                    if (String(data).toLowerCase().includes('success')) wanderToast('📍 Location set — check your iPhone!');
+                    else wanderToast('⚠️ ' + data);
+                } else { displayToast(data); }
+            })
+            .catch(error => {
+                console.error('Error setting location:', error);
+            });
+    }
+
+    function stopLocation() {
+        fetch('/stop_location', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+        })
+            .then(response => response.text())
+            .then(data => {
+                console.log('stop_location response:', data);
+                if (window.wanderToast) {
+                    if (String(data).toLowerCase().includes('clear')) wanderToast('✅ Location restored to your real GPS');
+                    else wanderToast('⚠️ ' + data);
+                } else { displayToast(data); }
+            })
+            .catch(error => {
+                console.error('Error stopping location:', error);
+            });
+    }
+
+    // Function to enable or disable the Set Location button based on conditions
+    function updateSetLocationButtonStatus() {
+        var setLocationButton = document.getElementById('set-location');
+        var rsdDataElement = document.getElementById('rsdData');
+        var coordinatesInput = document.getElementById('coordinates');
+        var enableButton = rsdDataElement.value.trim() !== '' && coordinatesInput.value.trim() !== '';
+        setLocationButton.disabled = !enableButton;
+    }
+
+    // Function to enable or disable the Stop Location button based on conditions
+    function updateStopLocationButtonStatus() {
+        var stopLocationButton = document.getElementById('stop-location');
+        var rsdDataElement = document.getElementById('rsdData');
+        var enableButton = rsdDataElement.value.trim() !== '';
+        stopLocationButton.disabled = !enableButton;
+    }
+
+    function exitApp() {
+        console.log('Exit App function called');
+
+        try {
+            // Display a non-blocking modal dialog indicating server shutdown
+            $('#aboutModal').modal('hide');
+            $('#shutdownModal').modal('show');
+
+            // Use navigator.sendBeacon to make the POST request without waiting for a response
+            const data = JSON.stringify({});
+            navigator.sendBeacon('/exit', data);
+            window.open('', '_self', ''); window.close();
+
+            console.log('POST request sent using sendBeacon');
+        } catch (error) {
+            console.error('Error during server shutdown:', error);
+        }
+    }
+
+    function aboutApp() {
+        event.preventDefault();
+        var appVersion = "{{ app_version }}";
+        alert("App Version: " + appVersion);
+    }
+
+    // Function to show the modal
+    function showModal() {
+<!--        var modal = document.getElementById('developerModeModal');-->
+<!--        modal.style.display = 'block';-->
+            $('#developerModeModal').modal('show');
+
+    }
+
+        // Function to show the modal
+    function showModalTimeout() {
+            $('#modalTimeout').modal('show');
+    }
+
+    // Function to close the modal
+    function closeModal() {
+        var modal = document.getElementById('developerModeModal');
+        modal.style.display = 'none';
+    }
+
+    // Function to toast
+    function toast(data) {
+    const toastLiveExample = document.getElementById('liveToast')
+    const toastBootstrap = bootstrap.Toast.getOrCreateInstance(toastLiveExample)
+    var data = data;
+    toastBootstrap.show();
+  }
+
+  function displayToast(message) {
+      // Create a new toast element
+      var toast = document.createElement('div');
+      toast.classList.add('toast');
+      toast.setAttribute('role', 'alert');
+      toast.setAttribute('aria-live', 'assertive');
+      toast.setAttribute('aria-atomic', 'true');
+
+      // Set up the toast content
+      toast.innerHTML = `
+        <div class="toast-header">
+          <strong class="mr-auto">Wander</strong>
+          <small>Just Now</small>
+          <button type="button" class="ml-2 mb-1 close" data-bs-dismiss="toast" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="toast-body">
+          ${message}
+        </div>
+      `;
+
+      // Append the toast to the toast container
+      document.querySelector('.toast-container').appendChild(toast);
+
+      // Initialize the toast
+      var toastElement = new bootstrap.Toast(toast);
+
+      // Show the toast
+      toastElement.show();
+    }
+
+function continueAfterDeveloperModeRequired() {
+    var selectedOptionValue = JSON.parse(document.getElementById('device').value);
+    var selectedDeviceIdentifier = selectedOptionValue.Identifier;
+    var selectedDeviceVersion = selectedOptionValue.ProductVersion;
+    var connectTextElement = document.getElementById('connectText');
+    var spinnerElement = document.getElementById('spinner');
+    console.log('Enabling Developer Mode on: ', selectedDeviceIdentifier);
+
+    if (connectTextElement) {
+        connectTextElement.innerText = "Enabling Developer Mode";
+        spinnerElement.style.display = 'inline-block'; // Hide the spinner
+    }
+
+    // Make an AJAX request to enable developer mode
+    fetch('/enable_developer_mode', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            udid: selectedDeviceIdentifier,
+        }),
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('post enable dev mode fetch data: ', data);
+        if (data.success) {
+            // Developer mode enabled successfully
+            connectDevice();
+        } else if (data.error) {
+            // Handle the error, e.g., display an alert or take appropriate action
+            //alert(data.error);
+            showAlertOrModal(data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error enabling developer mode:', error);
+        // Handle the error, e.g., display an alert or take appropriate action
+        //alert('Error enabling developer mode.');
+        showAlertOrModal('Error enabling developer mode.');
+    });
+}
+
+
+
+
+
+
+// Function to cancel after developer mode is required
+    function cancelAfterDeveloperModeRequired() {
+        var connectTextElement = document.getElementById('connectText');
+        var spinnerElement = document.getElementById('spinner');
+        // Perform any actions needed to cancel after developer mode is required
+        // Reset connectTextElement
+        if (connectTextElement) {
+            connectTextElement.innerText = "Connect Device";
+            spinnerElement.style.display = 'none'; // Hide the spinner
+        }
+
+
+        //window.location.href = '/';
+        fetch('/', {
+            method: 'GET',
+
+        })
+
+    }
+
+
+    // Function to show either an alert or the developerError modal
+    function showAlertOrModal(errorMessage) {
+        // Check if the modal element exists
+        var connectTextElement = document.getElementById('connectText');
+        var spinnerElement = document.getElementById('spinner');
+        // Perform any actions needed to cancel after developer mode is required
+        // Reset connectTextElement
+        if (connectTextElement) {
+            connectTextElement.innerText = "Connect Device";
+            spinnerElement.style.display = 'none'; // Hide the spinner
+        }
+
+        var developerErrorModal = document.getElementById('developerError');
+        if (developerErrorModal) {
+            // Set the error message in the modal
+            document.getElementById('developerErrorMessage').innerText = errorMessage;
+            // Show the modal
+            $('#developerError').modal('show');
+        } else {
+            // Fallback to alert if modal element doesn't exist
+            alert(errorMessage);
+        }
+    }
+
+
+
+
+    document.addEventListener('DOMContentLoaded', function () {
+    console.log("test");
+    initializeMap();
+    searchLocation();
+    document.getElementById('rsdData').addEventListener('change', updateSetLocationButtonStatus);
+    document.getElementById('coordinates').addEventListener('input', updateSetLocationButtonStatus);
+    populateDeviceList();
+    updateStopLocationButtonStatus();  // Add this line to update the Stop Location button status
+    // Add event listener for keydown event
+    document.addEventListener('keydown', handleKeyDown);
+    console.log("listener loaded");
+
+    document.getElementById('search').addEventListener('click', handleSearch);
+
+
+
+    // Add the new event listeners for 'Enter' keypress and 'Search' button click
+    document.getElementById('coordinates').addEventListener('keypress', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            handleSearch();
+        }
+    });
+
+
+
+
+
+
+
+
+});
+</script>
+
+<p></p>
+
+<div class="mb-3" id="wtheme-search">
+    <div class="wtheme-card-title">Set location</div>
+    <div class="row align-items-center">
+        <div class="col-md-auto">
+            <label class="mb-0" for="coordinates" style="display:none">Location:</label>
+        </div>
+        <div class="col">
+            <div id="wsug-wrap" style="position:relative">
+                <input type="text" class="form-control" id="coordinates" placeholder="Search a place or paste lat, lng" autocomplete="off">
+                <ul id="wsug-list"></ul>
+            </div>
+        </div>
+        <div class="col-md-auto">
+            <button type="button" class="btn btn-primary" id="search" onclick="handleSearch()">Search</button>
+        </div>
+    </div>
+    <div class="row align-items-center wtheme-setrow">
+        <div class="col">
+            <button type="button" class="btn btn-primary w-100" data-toggle="popover" id="set-location" disabled onclick="setLocation()">Set / Teleport</button>
+        </div>
+        <div class="col">
+            <button type="button" class="btn btn-primary w-100" data-toggle="popover" id="stop-location" disabled onclick="stopLocation()">Stop</button>
+        </div>
+    </div>
+</div>
+
+<style>
+  #wsug-list{list-style:none;margin:4px 0 0;padding:0;position:absolute;left:0;right:0;top:100%;z-index:12070;
+    background:#fff;border:1px solid #d5d9e0;border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.16);
+    max-height:240px;overflow-y:auto;display:none;font:13px -apple-system,Helvetica,Arial}
+  #wsug-list.on{display:block}
+  #wsug-list li{padding:9px 12px;cursor:pointer;color:#26303b;border-bottom:1px solid #f2f4f7;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #wsug-list li:last-child{border-bottom:none}
+  #wsug-list li:hover,#wsug-list li.active{background:#eef4ff}
+  #wsug-list li.muted{color:#9aa4b2;cursor:default;background:#fff}
+</style>
+<script>
+(function(){
+  "use strict";
+  var input=document.getElementById('coordinates');
+  var list=document.getElementById('wsug-list');
+  if(!input||!list)return;
+  var provider=null, timer=null, lastQ='', activeIdx=-1, items=[];
+
+  // Looks like "lat, lng" (or "lat lng") coordinates? If so, skip autocomplete.
+  function looksLikeCoords(s){
+    return /^\s*-?\d{1,3}(\.\d+)?\s*[,\s]\s*-?\d{1,3}(\.\d+)?\s*$/.test(s||'');
+  }
+  function getProvider(){
+    if(provider)return provider;
+    if(window.GeoSearch&&GeoSearch.OpenStreetMapProvider){provider=new GeoSearch.OpenStreetMapProvider();}
+    return provider;
+  }
+  function hide(){list.classList.remove('on');list.innerHTML='';items=[];activeIdx=-1;}
+  function render(results){
+    list.innerHTML='';items=results;activeIdx=-1;
+    if(!results.length){
+      var li=document.createElement('li');li.className='muted';li.textContent='No matches';
+      list.appendChild(li);list.classList.add('on');return;
+    }
+    results.forEach(function(r,i){
+      var li=document.createElement('li');li.textContent=r.label;li.setAttribute('data-i',i);
+      li.addEventListener('mousedown',function(ev){ev.preventDefault();choose(i);});
+      list.appendChild(li);
+    });
+    list.classList.add('on');
+  }
+  function choose(i){
+    var r=items[i];if(!r)return;
+    input.value=r.label;hide();
+    // Reuse the app's existing geocode/search path so the map moves + pin drops.
+    if(typeof window.searchLocation==='function'){window.searchLocation(r.label);}
+    else if(typeof window.handleSearch==='function'){window.handleSearch();}
+  }
+  function query(q){
+    var p=getProvider();
+    if(!p){return;}
+    p.search({query:q}).then(function(results){
+      if(input.value.trim()!==q)return; // stale
+      render((results||[]).slice(0,7).map(function(r){return {label:r.label,x:r.x,y:r.y};}));
+    }).catch(function(){hide();});
+  }
+  input.addEventListener('input',function(){
+    var v=input.value.trim();
+    if(timer)clearTimeout(timer);
+    if(v.length<3||looksLikeCoords(v)){hide();lastQ='';return;}
+    if(v===lastQ)return;lastQ=v;
+    timer=setTimeout(function(){query(v);},300);
+  });
+  input.addEventListener('keydown',function(e){
+    if(!list.classList.contains('on'))return;
+    var lis=list.querySelectorAll('li:not(.muted)');
+    if(e.key==='ArrowDown'){e.preventDefault();activeIdx=Math.min(activeIdx+1,lis.length-1);}
+    else if(e.key==='ArrowUp'){e.preventDefault();activeIdx=Math.max(activeIdx-1,0);}
+    else if(e.key==='Enter'){ if(activeIdx>=0&&items[activeIdx]){e.preventDefault();choose(activeIdx);} return; }
+    else if(e.key==='Escape'){hide();return;}
+    else return;
+    lis.forEach(function(li,i){li.classList.toggle('active',i===activeIdx);});
+  });
+  input.addEventListener('blur',function(){setTimeout(hide,120);});
+})();
+</script>
+
+<!-- Set/Stop merged into the #wtheme-search "Set location" card above -->
+<div class="mb-3" id="wtheme-actions"></div>
+
+<div class="mb-3" id="wtheme-modes-card">
+    <div class="wtheme-card-title">Movement modes <span class="wmode-pro-pill">PRO</span></div>
+<div class="wmode-bar" id="wmodeBar">
+  <button class="wmode-tbtn" data-mode="jump" data-pro="1" title="Jump-Teleport (Pro)">&#9889;</button>
+  <button class="wmode-tbtn" data-mode="two" data-pro="1" title="Two-Spot Route (Pro)">&#8644;</button>
+  <button class="wmode-tbtn" data-mode="multi" data-pro="1" title="Multi-Spot Route (Pro)">&#9906;</button>
+  <button class="wmode-tbtn" data-mode="joy" data-pro="1" title="Joystick (Pro)">&#9711;</button>
+  <button class="wmode-tbtn" data-mode="pogo" data-pro="1" title="Pok&eacute;mon GO Mode (Pro)">&#127918;</button>
+</div>
+
+<div class="wmode-card" id="wmodeCard">
+  <div class="wmode-chead"><h4 id="wmodeTitle">Teleport</h4><button class="wmode-cclose" id="wmodeClose">&times;</button></div>
+  <div class="wmode-cbody">
+
+    <!-- Teleport -->
+    <div class="pane" data-pane="teleport">
+      <div class="wmode-pick" data-pick="teleport"></div>
+      <div class="wmode-row"><label class="wmode-lbl">Destination (lat, lng)</label>
+        <input class="wmode-in" id="wmTelLL" placeholder="37.7749, -122.4194"></div>
+      <label class="wmode-chk"><input type="checkbox" id="wmTelFluc" checked> Fluctuation (GPS jitter)</label>
+      <button class="wmode-btn" id="wmTelGo">Teleport here</button>
+      <div class="wmode-msg" id="wmTelMsg"></div>
+    </div>
+
+    <!-- Jump -->
+    <div class="pane" data-pane="jump">
+      <div class="wmode-pick" data-pick="jump"></div>
+      <div class="wmode-row"><label class="wmode-lbl">Add point (lat, lng)</label>
+        <input class="wmode-in" id="wmJumpLL" placeholder="click map or type, then Add"></div>
+      <button class="wmode-btn sm" id="wmJumpAdd" style="margin-bottom:9px">+ Add point</button>
+      <div class="wmode-list" id="wmJumpList"></div>
+      <label class="wmode-chk"><input type="checkbox" id="wmJumpAuto" checked> Auto cooldown</label>
+      <label class="wmode-chk"><input type="checkbox" id="wmJumpFluc" checked> Fluctuation</label>
+      <button class="wmode-btn" id="wmJumpGo">Start jump-teleport</button>
+      <div class="wmode-msg" id="wmJumpMsg"></div>
+    </div>
+
+    <!-- Two-Spot -->
+    <div class="pane" data-pane="two">
+      <div class="wmode-pick" data-pick="two"></div>
+      <div class="wmode-hint">Start = your current location. Pick one destination.</div>
+      <div class="wmode-row"><label class="wmode-lbl">Destination (lat, lng)</label>
+        <input class="wmode-in" id="wmTwoLL" placeholder="click map or type"></div>
+      <label class="wmode-lbl">Speed</label>
+      <div class="wmode-speed" data-speed="two">
+        <button data-mps="1.4">Walk</button><button data-mps="5" class="on">Bike</button><button data-mps="13">Drive</button>
+      </div>
+      <button class="wmode-btn" id="wmTwoGo">Walk route</button>
+      <div class="wmode-msg" id="wmTwoMsg"></div>
+    </div>
+
+    <!-- Multi-Spot -->
+    <div class="pane" data-pane="multi">
+      <div class="wmode-pick" data-pick="multi"></div>
+      <div class="wmode-row"><label class="wmode-lbl">Add point (lat, lng)</label>
+        <input class="wmode-in" id="wmMultiLL" placeholder="click map or type, then Add"></div>
+      <button class="wmode-btn sm" id="wmMultiAdd" style="margin-bottom:9px">+ Add point</button>
+      <div class="wmode-list" id="wmMultiList"></div>
+      <label class="wmode-lbl">Speed</label>
+      <div class="wmode-speed" data-speed="multi">
+        <button data-mps="1.4" class="on">Walk</button><button data-mps="5">Bike</button><button data-mps="13">Drive</button>
+      </div>
+      <div class="wmode-row"><label class="wmode-lbl">Loop</label>
+        <select class="wmode-in" id="wmMultiLoop">
+          <option value="once">Once</option><option value="round">Round trip</option><option value="loop">Loop forever</option>
+        </select></div>
+      <button class="wmode-btn" id="wmMultiGo">Walk route</button>
+      <div class="wmode-msg" id="wmMultiMsg"></div>
+    </div>
+
+    <!-- Joystick -->
+    <div class="pane" data-pane="joy">
+      <div class="wmode-pick" data-pick="joy"></div>
+      <div class="wmode-hint">Starts at your current location, then steer.</div>
+      <div class="wmode-dpad">
+        <span class="sp"></span>
+        <button data-head="0" title="North">&#9650;</button>
+        <span class="sp"></span>
+        <button data-head="270" title="West">&#9664;</button>
+        <button class="stop" data-stop="1" title="Stop moving">&#9632;</button>
+        <button data-head="90" title="East">&#9654;</button>
+        <span class="sp"></span>
+        <button data-head="180" title="South">&#9660;</button>
+        <span class="sp"></span>
+      </div>
+      <label class="wmode-lbl">Speed</label>
+      <div class="wmode-speed" data-speed="joy">
+        <button data-mps="1.4" class="on">Walk</button><button data-mps="5">Bike</button><button data-mps="13">Drive</button>
+      </div>
+      <div class="wmode-msg" id="wmJoyMsg"></div>
+    </div>
+
+    <!-- Locked (free tier) — shown when a non-Pro user opens a Pro mode -->
+    <div class="pane" data-pane="__locked">
+      <div class="wmode-locked">
+        <div class="wmode-locked-badge">&#128274; Wander Pro</div>
+        <p id="wmLockedMsg">This mode is part of Wander Pro.</p>
+        <button class="wmode-btn" id="wmUnlockBtn">Unlock Wander Pro</button>
+        <p class="wmode-hint" style="text-align:center;margin:8px 0 0">Teleport &amp; search stay free forever.</p>
+      </div>
+    </div>
+
+    <button class="wmode-btn stop" id="wmStop" style="margin-top:6px">&#9632; Stop</button>
+  </div>
+</div>
+
+</div>
+
+
+
+    </div>
+</div>
+<div id="wtheme-footer">
+    <hr>
+Version: {{ app_version_num }}<br>
+Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wanderspoofer.com</a>
+</div>
+
+
+
+
+
+<div class="modal fade" id="shutdownModal" tabindex="-1" role="dialog" aria-labelledby="shutdownModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="shutdownModalLabel">Server Shutdown</h5>
+                <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                Thank you for using the app!
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="aboutModal" tabindex="-1" role="dialog" aria-labelledby="aboutModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="aboutModalLabel">Wander</h5>
+                <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                App Version: {{ app_version }}
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade" id="developerModeModal" tabindex="-1" role="dialog" aria-labelledby="devModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="developerModeModal">Developer Mode</h5>
+                <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>The device is enabled with a passcode </p>
+                Developer Mode is required and cannot be enabled
+                <p>Please temporarily disable your passcode and</p>
+                try to connect again
+                <p>Enabling Developer Mode is only required one-time.</p>
+            </div>
+            <div class="modal-footer d-flex justify-content-center">
+                <button type="button" class="btn btn-secondary mx-auto" data-bs-dismiss="modal" onclick="window.location.href = '/'">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="pairRecordModal" tabindex="-1" role="dialog" aria-labelledby="pairRecordModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pairRecordModalLabel">No Pair Record</h5>
+                <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Pair Record Not Found</p>
+                Please use a USB Cable to create a Pair Record
+
+            </div>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="window.location.href = '/'">OK</button>
+
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="developerModeRequiredModal" tabindex="-1" role="dialog" aria-labelledby="developerModeRequiredModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="developerModeRequiredModalLabel">Developer Mode Required</h5>
+                <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" style="text-align:left">
+                <p><b>Developer Mode isn't turned on for this iPhone.</b> It's a quick one-time switch — and the option is now visible because Wander just connected to your phone.</p>
+                <p style="margin-bottom:4px"><b>Turn it on yourself (recommended):</b></p>
+                <ol style="padding-left:20px; margin-bottom:10px">
+                    <li>On your iPhone: <b>Settings → Privacy &amp; Security</b></li>
+                    <li>Scroll to the bottom → <b>Developer Mode → On</b></li>
+                    <li><b>Restart</b> when asked; after it reboots, tap <b>Turn On</b> and enter your passcode.</li>
+                </ol>
+                <p style="font-size:13px; opacity:.8; margin:0">Then come back and click <b>Connect Device</b> again.</p>
+                <hr>
+                <p style="font-size:13px; margin:0">Prefer to let Wander do it? It can enable Developer Mode automatically, but <b>your iPhone will reboot</b> and you must <b>temporarily remove your passcode</b> first (an Apple requirement).</p>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal" onclick="window.location.href = '/'">I'll turn it on in Settings</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="continueAfterDeveloperModeRequired()">Enable automatically</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="modalTimeout" tabindex="-1" role="dialog" aria-labelledby="modalTimeout" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTimeout">Connect Timeout</h5>
+                <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body text-center">
+                <p>Unable to create device tunnel within 60 seconds</p>
+
+                <p>Please try to connect again</p>
+
+            </div>
+            <div class="modal-footer d-flex justify-content-center">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="window.location.href = '/'">Close</button>
+
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="developerError" tabindex="-1" role="dialog" aria-labelledby="developerErrorLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="developerErrorLabel">Developer Error</h5>
+                <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body text-center">
+                <p id="developerErrorMessage"></p>
+            </div>
+            <div class="modal-footer d-flex justify-content-center">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="window.location.href = '/'">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="liveToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header">
+      <strong class="me-auto">Wander</strong>
+      <small>Just Now</small>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body">
+        {{ data }}
+    </div>
+  </div>
+</div>
+<!-- Toast Container -->
+  <div aria-live="polite" aria-atomic="true" style="position: relative; min-height: 200px;">
+    <div class="toast-container position-absolute top-0 end-0 p-3" style="z-index: 9999;"></div>
+  </div>
+
+</div>
+
+<!-- ===== Wander PoGo Mode ===== -->
+<style>
+  .wpogo-fab{position:fixed;right:18px;bottom:18px;z-index:12000;background:#e63946;color:#fff;border:none;border-radius:26px;padding:12px 18px;font:600 14px -apple-system,Helvetica,Arial;box-shadow:0 8px 22px rgba(0,0,0,.25);cursor:pointer;display:flex;align-items:center;gap:8px}
+  .wpogo-fab:hover{filter:brightness(1.05)}
+  .wpogo-fab .ball{width:18px;height:18px;border-radius:50%;background:linear-gradient(#e63946 0 50%,#fff 50% 100%);border:2px solid #222;box-sizing:border-box;position:relative}
+  .wpogo-fab .ball::after{content:"";position:absolute;top:50%;left:50%;width:6px;height:6px;background:#fff;border:2px solid #222;border-radius:50%;transform:translate(-50%,-50%)}
+  .wpogo-panel{position:fixed;top:66px;right:-400px;width:370px;max-width:92vw;height:calc(100% - 66px);background:#fff;box-shadow:-8px 0 30px rgba(0,0,0,.18);z-index:12060;transition:right .28s ease;display:flex;flex-direction:column;font:14px -apple-system,Helvetica,Arial;border-top-left-radius:14px}
+  .wpogo-panel.open{right:0}
+  .wpogo-head{padding:16px 18px;background:linear-gradient(135deg,#2b7fd4,#185FA5);color:#fff;display:flex;align-items:center;justify-content:space-between;border-top-left-radius:14px}
+  .wpogo-head h3{margin:0;font-size:17px}
+  .wpogo-close{background:rgba(255,255,255,.18);border:none;color:#fff;font-size:22px;font-weight:700;cursor:pointer;line-height:1;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;transition:background .15s}
+  .wpogo-close:hover{background:rgba(255,255,255,.35)}
+  .wpogo-scrim{position:fixed;inset:0;z-index:12055;background:transparent;display:none}
+  .wpogo-scrim.on{display:block}
+  .wpogo-cd{padding:12px 18px;background:#fff7e6;border-bottom:1px solid #f0e2c0;color:#7a5c00;font-size:13px;display:none}
+  .wpogo-cd.on{display:block}
+  .wpogo-body{overflow-y:auto;flex:1;padding:8px 0}
+  .wpogo-sec{padding:12px 18px 4px;font-weight:700;color:#6b7a8d;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  .wpogo-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 18px;border-bottom:1px solid #eef2f6}
+  .wpogo-item .nm{font-weight:600;color:#0c1a2b}
+  .wpogo-item .ar{font-size:12px;color:#6b7a8d}
+  .wpogo-item .badge{font-size:10px;font-weight:700;color:#185FA5;background:#eaf2fb;border-radius:8px;padding:2px 7px;margin-left:6px}
+  .wpogo-btn{background:#185FA5;color:#fff;border:none;border-radius:16px;padding:7px 14px;font-weight:600;cursor:pointer;font-size:13px;white-space:nowrap}
+  .wpogo-btn.walk{background:#2ecc71}
+</style>
+<!-- PoGo now opens from the Movement modes toolbar (data-mode="pogo"); FAB removed for one clean surface -->
+<div class="wpogo-scrim" id="wpogoScrim" onclick="wpogoToggle(false)"></div>
+<div class="wpogo-panel" id="wpogoPanel">
+  <div class="wpogo-head"><h3>Pok&eacute;mon GO Mode</h3><button class="wpogo-close" onclick="wpogoToggle(false)" title="Close (Esc)" aria-label="Close">&times;</button></div>
+  <div class="wpogo-cd" id="wpogoCd"></div>
+  <div class="wpogo-body" id="wpogoBody">Loading hotspots&hellip;</div>
+</div>
+<script>
+(function(){
+  var cur=null, cdTimer=null;
+  function hav(a,b){var R=6371,dLat=(b[0]-a[0])*Math.PI/180,dLng=(b[1]-a[1])*Math.PI/180,
+    la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180;
+    var x=Math.pow(Math.sin(dLat/2),2)+Math.cos(la1)*Math.cos(la2)*Math.pow(Math.sin(dLng/2),2);
+    return 2*R*Math.asin(Math.sqrt(x));}
+  window.wpogoToggle=function(o){
+    var panel=document.getElementById('wpogoPanel');
+    var scrim=document.getElementById('wpogoScrim');
+    var open=(o===undefined)?!panel.classList.contains('open'):!!o;
+    panel.classList.toggle('open',open);
+    if(scrim)scrim.classList.toggle('on',open);
+  };
+  // Close on Escape when the panel is open.
+  document.addEventListener('keydown',function(e){
+    if((e.key==='Escape'||e.key==='Esc')&&document.getElementById('wpogoPanel').classList.contains('open')){
+      window.wpogoToggle(false);
+    }
+  });
+  // Close when clicking the Leaflet map (outside the panel).
+  (function bindMapClose(n){
+    if(window.map&&typeof window.map.on==='function'){
+      window.map.on('click',function(){
+        if(document.getElementById('wpogoPanel').classList.contains('open'))window.wpogoToggle(false);
+      });
+      return;
+    }
+    if(n>0)setTimeout(function(){bindMapClose(n-1);},600);
+  })(15);
+  function post(u,b){return fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});}
+  // Shared: is a device connected? rsdData holds RSD data only while connected+visible.
+  function deviceConnected(){
+    var el=document.getElementById('rsdData');
+    if(!el)return false;
+    if((el.value||'').trim()==='')return false;
+    // Hidden (display:none) means the device was disconnected.
+    if(window.getComputedStyle&&window.getComputedStyle(el).display==='none')return false;
+    return true;
+  }
+  window.wanderDeviceConnected=deviceConnected;
+  function toast(text){
+    var t=document.getElementById('wanderToast');
+    if(!t){
+      t=document.createElement('div');t.id='wanderToast';
+      t.style.cssText='position:fixed;left:50%;bottom:88px;transform:translateX(-50%);z-index:13000;'+
+        'background:#e63946;color:#fff;font:600 14px -apple-system,Helvetica,Arial;padding:12px 18px;'+
+        'border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.28);opacity:0;transition:opacity .2s;pointer-events:none;max-width:80vw;text-align:center';
+      document.body.appendChild(t);
+    }
+    t.textContent=text;t.style.opacity='1';
+    clearTimeout(t._h);t._h=setTimeout(function(){t.style.opacity='0';},2600);
+  }
+  window.wanderToast=toast;
+  function showCd(mins){
+    var el=document.getElementById('wpogoCd');el.classList.add('on');
+    var end=Date.now()+mins*60000;
+    if(cdTimer)clearInterval(cdTimer);
+    function tick(){var s=Math.max(0,Math.round((end-Date.now())/1000));
+      var m=Math.floor(s/60),ss=('0'+(s%60)).slice(-2);
+      el.innerHTML=s>0?('&#9201; <b>Cooldown '+m+':'+ss+'</b> &mdash; wait this long before catching/spinning to stay soft-ban safe.')
+                      :'&#9989; Cooldown clear &mdash; safe to catch &amp; spin.';
+      if(s<=0)clearInterval(cdTimer);}
+    tick();cdTimer=setInterval(tick,1000);
+  }
+  function firstJumpCd(){
+    var el=document.getElementById('wpogoCd');el.classList.add('on');
+    if(cdTimer)clearInterval(cdTimer);
+    el.innerHTML='&#128640; <b>First jump &mdash; no cooldown yet.</b> Catch &amp; spin freely; cooldown starts on your next jump.';
+  }
+  window.wpogoTeleport=function(lat,lng){
+    if(!deviceConnected()){ toast('Connect your device first'); return; }
+    if(cur){var km=hav(cur,[lat,lng]);
+      fetch('/wander/cooldown?km='+km).then(function(r){return r.json();}).then(function(d){showCd(d.minutes||0);});}
+    else{ firstJumpCd(); }
+    post('/wander/teleport',{lat:lat,lng:lng,fluctuate:true})
+      .then(function(r){ if(!r.ok)toast('Connect your device first'); })
+      .catch(function(){ toast('Connect your device first'); });
+    cur=[lat,lng];
+  };
+  window.wpogoWalk=function(points,speed){
+    if(!deviceConnected()){ toast('Connect your device first'); return; }
+    post('/wander/route',{points:points,speed_mps:speed,loop:'loop'})
+      .then(function(r){ if(!r.ok)toast('Connect your device first'); })
+      .catch(function(){ toast('Connect your device first'); });
+  };
+  function esc(s){return (s||'').replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  fetch('/wander/pogo').then(function(r){return r.json();}).then(function(d){
+    var h='<div class="wpogo-sec">Hotspots &mdash; tap to teleport</div>';
+    (d.hotspots||[]).forEach(function(s){
+      h+='<div class="wpogo-item"><div><div class="nm">'+esc(s.name)+'<span class="badge">'+esc(s.cat)+'</span></div><div class="ar">'+esc(s.area)+'</div></div>'+
+         '<button class="wpogo-btn" onclick="wpogoTeleport('+s.lat+','+s.lng+')">Teleport</button></div>';
+    });
+    h+='<div class="wpogo-sec">Premade routes &mdash; walk &amp; spin</div>';
+    (d.routes||[]).forEach(function(r){
+      h+='<div class="wpogo-item"><div><div class="nm">'+esc(r.name)+'</div><div class="ar">'+esc(r.area)+'</div></div>'+
+         '<button class="wpogo-btn walk" onclick=\'wpogoWalk('+JSON.stringify(r.points)+','+r.speed_mps+')\'>Walk</button></div>';
+    });
+    document.getElementById('wpogoBody').innerHTML=h;
+  }).catch(function(){document.getElementById('wpogoBody').innerHTML='<div style="padding:18px;color:#c00">Could not load PoGo data. Connect your device first.</div>';});
+})();
+</script>
+
+<!-- ===== Wander Mode Toolbar (scoped: wmode-) ===== -->
+<style>
+  .wmode-bar{position:static;display:flex;gap:6px;align-items:center;flex-wrap:wrap;
+    background:transparent;border:none;border-radius:0;padding:0;margin-bottom:2px;
+    font:13px -apple-system,Helvetica,Arial}
+  .wmode-tbtn{width:38px;height:38px;border:none;border-radius:10px;background:#f1f3f6;color:#26303b;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;line-height:1;
+    transition:background .15s,transform .1s}
+  .wmode-tbtn:hover{background:#e3e7ee}
+  .wmode-tbtn.on{background:#2f6bff;color:#fff}
+  .wmode-tbtn.on:hover{background:#1f57e6}
+  /* ---- Free / Pro gating visuals ---- */
+  .wmode-pro-pill{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.05em;
+    background:linear-gradient(135deg,#ff8a00,#e63946);color:#fff;border-radius:6px;padding:2px 6px;
+    vertical-align:middle;margin-left:4px}
+  body.wander-pro .wmode-pro-pill{display:none}
+  .wmode-locked{text-align:center;padding:6px 2px 2px}
+  .wmode-locked-badge{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+    background:linear-gradient(135deg,#ff8a00,#e63946);color:#fff;border-radius:8px;padding:4px 10px;margin-bottom:10px}
+  .wmode-locked p{font-size:13px;color:#4b5563;margin:0 0 12px;line-height:1.5}
+  .wmode-locked .wmode-btn{background:linear-gradient(135deg,#ff8a00,#e63946)}
+  .wmode-locked .wmode-btn:hover{filter:brightness(1.06);background:linear-gradient(135deg,#ff8a00,#e63946)}
+  /* When a movement mode is open, focus the panel on it: tuck the Device + Set-location
+     cards away so the column never needs to scroll (they return when the mode closes). */
+  body.wander-mode-open #wtheme-connect,
+  body.wander-mode-open #wtheme-search{display:none;}
+
+  .wmode-card{position:static;width:auto;max-width:none;
+    background:transparent;border:none;border-top:1px solid #eef0f3;border-radius:0;box-shadow:none;
+    font:13px -apple-system,Helvetica,Arial;color:#26303b;display:none;overflow:visible;margin-top:8px}
+  .wmode-card.open{display:block}
+  .wmode-chead{display:flex;align-items:center;justify-content:space-between;padding:8px 0 6px;
+    background:transparent;border-bottom:none}
+  .wmode-chead h4{margin:0;font-size:14px;font-weight:700}
+  .wmode-cclose{border:none;background:transparent;font-size:20px;line-height:1;color:#8a94a2;cursor:pointer}
+  .wmode-cbody{padding:13px 14px}
+  .wmode-cbody .pane{display:none}
+  .wmode-cbody .pane.on{display:block}
+  .wmode-row{margin-bottom:9px}
+  .wmode-lbl{display:block;font-size:11px;font-weight:600;color:#6b7280;margin-bottom:3px;text-transform:uppercase;letter-spacing:.03em}
+  .wmode-in{width:100%;box-sizing:border-box;border:1px solid #d5d9e0;border-radius:8px;padding:7px 9px;font:13px -apple-system,Helvetica,Arial}
+  .wmode-in:focus{outline:none;border-color:#2f6bff}
+  .wmode-btn{width:100%;box-sizing:border-box;border:none;border-radius:9px;background:#2f6bff;color:#fff;
+    font:600 13px -apple-system,Helvetica,Arial;padding:9px;cursor:pointer;transition:background .15s}
+  .wmode-btn:hover{background:#1f57e6}
+  .wmode-btn.stop{background:#e63946}
+  .wmode-btn.stop:hover{background:#c92f3b}
+  .wmode-btn.sm{padding:7px;font-size:12px}
+  .wmode-chk{display:flex;align-items:center;gap:7px;font-size:12.5px;color:#374151;margin-bottom:9px;cursor:pointer}
+  .wmode-chk input{width:15px;height:15px}
+  .wmode-hint{font-size:11px;color:#8a94a2;margin:2px 0 9px}
+  .wmode-list{max-height:118px;overflow-y:auto;border:1px solid #eef0f3;border-radius:8px;margin-bottom:9px}
+  .wmode-list:empty::after{content:"No points yet \2014 click the map or add lat,lng";display:block;padding:10px;color:#a3adba;font-size:11.5px;text-align:center}
+  .wmode-li{display:flex;align-items:center;justify-content:space-between;padding:5px 9px;border-bottom:1px solid #f2f4f7;font-size:12px}
+  .wmode-li:last-child{border-bottom:none}
+  .wmode-li button{border:none;background:transparent;color:#e63946;cursor:pointer;font-size:15px;line-height:1;padding:0 2px}
+  .wmode-speed{display:flex;gap:5px;margin-bottom:9px}
+  .wmode-speed button{flex:1;border:1px solid #d5d9e0;border-radius:8px;background:#fff;padding:7px 2px;
+    font:600 12px -apple-system,Helvetica,Arial;color:#374151;cursor:pointer}
+  .wmode-speed button.on{background:#2f6bff;color:#fff;border-color:#2f6bff}
+  .wmode-dpad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:9px;max-width:170px;margin-left:auto;margin-right:auto}
+  .wmode-dpad button{border:1px solid #d5d9e0;border-radius:9px;background:#f1f3f6;height:44px;font-size:18px;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;color:#26303b}
+  .wmode-dpad button:hover{background:#e3e7ee}
+  .wmode-dpad button.stop{background:#ffe8ea;color:#e63946;border-color:#f6c9cd}
+  .wmode-dpad .sp{visibility:hidden}
+  .wmode-msg{font-size:11.5px;margin-top:4px;min-height:15px}
+  .wmode-msg.ok{color:#1a9e57}
+  .wmode-msg.err{color:#e63946}
+  .wmode-pick{font-size:11px;color:#2f6bff;font-weight:600;margin-bottom:8px;min-height:14px}
+</style>
+
+<!-- mode toolbar relocated into #wtheme-panel (see Movement modes card) -->
+<script>
+(function(){
+  "use strict";
+  // ---- scoped helpers ----
+  function $(id){return document.getElementById(id);}
+  function qsa(sel,root){return Array.prototype.slice.call((root||document).querySelectorAll(sel));}
+  function post(url,body){
+    return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+  }
+  function parseLL(str){
+    if(!str)return null;
+    var m=String(str).split(',');
+    if(m.length!==2)return null;
+    var la=parseFloat(m[0]),ln=parseFloat(m[1]);
+    if(isNaN(la)||isNaN(ln))return null;
+    if(la<-90||la>90||ln<-180||ln>180)return null;
+    return [la,ln];
+  }
+  function msg(el,text,ok){el.textContent=text;el.className='wmode-msg '+(ok?'ok':'err');}
+
+  // ---- state ----
+  var lastClick=null;            // most recent map click {lat,lng}
+  var activeMode=null;           // currently shown pane key
+  var jumpPts=[], multiPts=[];   // point lists
+  var joyStarted=false;
+  var speeds={two:5, multi:1.4, joy:1.4};
+
+  var MODE_TITLES={teleport:'Teleport',jump:'Jump-Teleport',two:'Two-Spot Route',multi:'Multi-Spot Route',joy:'Joystick',pogo:'Pokémon GO Mode'};
+  var PICK_IN={teleport:'wmTelLL',jump:'wmJumpLL',two:'wmTwoLL',multi:'wmMultiLL'}; // where a click fills
+
+  // ---- hook Leaflet map (window.map from the main script) ----
+  function hookMap(){
+    if(!window.map || typeof window.map.on!=='function'){return false;}
+    window.map.on('click', function(e){
+      if(!e||!e.latlng)return;
+      lastClick={lat:+e.latlng.lat.toFixed(6), lng:+e.latlng.lng.toFixed(6)};
+      var pv=lastClick.lat+', '+lastClick.lng;
+      // fill the active mode's lat,lng input if it has one
+      if(activeMode && PICK_IN[activeMode]){var f=$(PICK_IN[activeMode]);if(f)f.value=pv;}
+      // update pick indicators
+      qsa('.wmode-pick').forEach(function(p){p.textContent='Last map click: '+pv;});
+    });
+    return true;
+  }
+  (function tryHook(n){ if(hookMap())return; if(n>0)setTimeout(function(){tryHook(n-1);},600); })(15);
+
+  // Resolve a lat,lng: prefer the text field, fall back to last map click.
+  function resolve(fieldId){
+    var v=parseLL($(fieldId).value);
+    if(v)return v;
+    if(lastClick)return [lastClick.lat,lastClick.lng];
+    return null;
+  }
+
+  // ---- toolbar wiring ----
+  qsa('.wmode-tbtn').forEach(function(btn){
+    btn.addEventListener('click',function(){ selectMode(btn.getAttribute('data-mode')); });
+  });
+  // The old floating "Unlock Now" button was removed; guard any legacy reference.
+  (function(){ var u=$('wmodeUnlock'); if(u) u.addEventListener('click',openPricing); })();
+  (function(){ var u=$('wmUnlockBtn'); if(u) u.addEventListener('click',openPricing); })();
+  $('wmodeClose').addEventListener('click',closeCard);
+
+  // ---- Free / Pro gating ----
+  var PRO_MODES={jump:1,two:1,multi:1,joy:1,pogo:1};   // Teleport + search stay free
+  function isPro(){ return window.WANDER_PRO===true || document.body.classList.contains('wander-pro'); }
+  function openPricing(){ window.open('https://wanderspoofer.com/#pricing','_blank'); }
+  // Future license check flips Pro on:  window.wanderSetPro(true)
+  window.wanderSetPro=function(on){ window.WANDER_PRO=!!on; document.body.classList.toggle('wander-pro',!!on); };
+
+  function selectMode(mode){
+    if(activeMode===mode){ closeCard(); return; }
+    if(PRO_MODES[mode] && !isPro()){ showLocked(mode); return; }   // free user -> upsell
+    if(mode==='pogo'){                                             // PoGo opens its full list, not an inline pane
+      qsa('.wmode-tbtn').forEach(function(b){ b.classList.remove('on'); });
+      if(window.wpogoToggle) window.wpogoToggle(true);
+      return;
+    }
+    activeMode=mode;
+    var st=$('wmStop'); if(st) st.style.display='';
+    qsa('.wmode-tbtn').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-mode')===mode); });
+    qsa('.wmode-cbody .pane').forEach(function(p){ p.classList.toggle('on', p.getAttribute('data-pane')===mode); });
+    $('wmodeTitle').textContent=MODE_TITLES[mode]||'Mode';
+    $('wmodeCard').classList.add('open');
+    document.body.classList.add('wander-mode-open');
+  }
+  function showLocked(mode){
+    activeMode='__locked';
+    qsa('.wmode-tbtn').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-mode')===mode); });
+    qsa('.wmode-cbody .pane').forEach(function(p){ p.classList.toggle('on', p.getAttribute('data-pane')==='__locked'); });
+    var nm=MODE_TITLES[mode]||'This mode';
+    $('wmodeTitle').textContent='🔒 '+nm;
+    var lm=$('wmLockedMsg'); if(lm) lm.textContent=nm+' is a Wander Pro feature. Unlock Pro to walk routes, drive, use the joystick and PoGo Mode.';
+    var st=$('wmStop'); if(st) st.style.display='none';   // nothing running to stop
+    $('wmodeCard').classList.add('open');
+    document.body.classList.add('wander-mode-open');
+  }
+  function closeCard(){
+    activeMode=null;
+    $('wmodeCard').classList.remove('open');
+    qsa('.wmode-tbtn').forEach(function(b){ b.classList.remove('on'); });
+    var st=$('wmStop'); if(st) st.style.display='';
+    document.body.classList.remove('wander-mode-open');
+  }
+
+  // ---- speed presets ----
+  qsa('.wmode-speed').forEach(function(grp){
+    var key=grp.getAttribute('data-speed');
+    qsa('button',grp).forEach(function(b){
+      b.addEventListener('click',function(){
+        qsa('button',grp).forEach(function(x){x.classList.remove('on');});
+        b.classList.add('on');
+        speeds[key]=parseFloat(b.getAttribute('data-mps'));
+      });
+    });
+  });
+
+  // ---- point lists (jump + multi) ----
+  function renderList(el,arr){
+    el.innerHTML='';
+    arr.forEach(function(p,i){
+      var li=document.createElement('div');li.className='wmode-li';
+      var span=document.createElement('span');span.textContent=(i+1)+'. '+p[0].toFixed(5)+', '+p[1].toFixed(5);
+      var x=document.createElement('button');x.innerHTML='&times;';x.title='Remove';
+      x.addEventListener('click',function(){arr.splice(i,1);renderList(el,arr);});
+      li.appendChild(span);li.appendChild(x);el.appendChild(li);
+    });
+  }
+  function addPoint(fieldId,arr,listEl,msgEl){
+    var v=resolve(fieldId);
+    if(!v){ msg(msgEl,'Enter lat,lng or click the map first.',false); return; }
+    arr.push(v); renderList(listEl,arr); $(fieldId).value=''; msg(msgEl,arr.length+' point(s).',true);
+  }
+  $('wmJumpAdd').addEventListener('click',function(){ addPoint('wmJumpLL',jumpPts,$('wmJumpList'),$('wmJumpMsg')); });
+  $('wmMultiAdd').addEventListener('click',function(){ addPoint('wmMultiLL',multiPts,$('wmMultiList'),$('wmMultiMsg')); });
+
+  // ---- device-connected guard (shared with the PoGo script) ----
+  function connected(){ return !window.wanderDeviceConnected || window.wanderDeviceConnected(); }
+  function notConnected(el){
+    msg(el,'Connect your device first.',false);
+    if(window.wanderToast)window.wanderToast('Connect your device first');
+  }
+
+  // ---- Teleport ----
+  $('wmTelGo').addEventListener('click',function(){
+    var v=resolve('wmTelLL');
+    if(!v){ msg($('wmTelMsg'),'Enter lat,lng or click the map.',false); return; }
+    if(!connected()){ notConnected($('wmTelMsg')); return; }
+    post('/wander/teleport',{lat:v[0],lng:v[1],fluctuate:$('wmTelFluc').checked})
+      .then(function(r){ if(!r.ok){ notConnected($('wmTelMsg')); return; } msg($('wmTelMsg'),'Teleported.',true); })
+      .catch(function(){ msg($('wmTelMsg'),'Network error.',false); });
+  });
+
+  // ---- Jump ----
+  $('wmJumpGo').addEventListener('click',function(){
+    if(jumpPts.length<1){ msg($('wmJumpMsg'),'Add at least one point.',false); return; }
+    post('/wander/jump',{points:jumpPts,auto_cooldown:$('wmJumpAuto').checked,fluctuate:$('wmJumpFluc').checked})
+      .then(function(r){ msg($('wmJumpMsg'), r.ok?'Jump-teleport started.':'Request failed.', r.ok); })
+      .catch(function(){ msg($('wmJumpMsg'),'Network error.',false); });
+  });
+
+  // ---- Two-Spot (route with 2 points) ----
+  $('wmTwoGo').addEventListener('click',function(){
+    var dest=resolve('wmTwoLL');
+    if(!dest){ msg($('wmTwoMsg'),'Pick a destination.',false); return; }
+    // Start = current location (map center as best available proxy on the desktop UI).
+    var startPt = (window.map && window.map.getCenter) ? [window.map.getCenter().lat, window.map.getCenter().lng] : dest;
+    post('/wander/route',{points:[startPt,dest],speed_mps:speeds.two,loop:'once'})
+      .then(function(r){ msg($('wmTwoMsg'), r.ok?'Route started.':'Request failed.', r.ok); })
+      .catch(function(){ msg($('wmTwoMsg'),'Network error.',false); });
+  });
+
+  // ---- Multi-Spot ----
+  $('wmMultiGo').addEventListener('click',function(){
+    if(multiPts.length<2){ msg($('wmMultiMsg'),'Add at least two points.',false); return; }
+    post('/wander/route',{points:multiPts,speed_mps:speeds.multi,loop:$('wmMultiLoop').value})
+      .then(function(r){ msg($('wmMultiMsg'), r.ok?'Route started.':'Request failed.', r.ok); })
+      .catch(function(){ msg($('wmMultiMsg'),'Network error.',false); });
+  });
+
+  // ---- Joystick ----
+  function joyEnsureStart(){
+    if(joyStarted)return Promise.resolve(true);
+    var c=(window.map && window.map.getCenter)?window.map.getCenter():null;
+    var body=c?{lat:c.lat,lng:c.lng,speed_mps:speeds.joy}:{speed_mps:speeds.joy};
+    return post('/wander/joystick/start',body).then(function(r){ joyStarted=r.ok; return r.ok; });
+  }
+  qsa('.wmode-dpad button').forEach(function(b){
+    b.addEventListener('click',function(){
+      if(b.getAttribute('data-stop')){
+        post('/wander/joystick/dir',{heading:0,speed_mps:speeds.joy,moving:false})
+          .then(function(r){ msg($('wmJoyMsg'), r.ok?'Stopped.':'Request failed.', r.ok); });
+        return;
+      }
+      var head=parseFloat(b.getAttribute('data-head'));
+      joyEnsureStart().then(function(){
+        post('/wander/joystick/dir',{heading:head,speed_mps:speeds.joy,moving:true})
+          .then(function(r){ msg($('wmJoyMsg'), r.ok?('Heading '+head+'°'):'Request failed.', r.ok); })
+          .catch(function(){ msg($('wmJoyMsg'),'Network error.',false); });
+      });
+    });
+  });
+
+  // ---- shared Stop ----
+  $('wmStop').addEventListener('click',function(){
+    joyStarted=false;
+    post('/wander/stop',{}).then(function(r){
+      var m=activeMode? $(({teleport:'wmTelMsg',jump:'wmJumpMsg',two:'wmTwoMsg',multi:'wmMultiMsg',joy:'wmJoyMsg'})[activeMode]) : null;
+      if(m) msg(m, r.ok?'Stopped.':'Stop failed.', r.ok);
+    });
+  });
+})();
+</script>
+
+<!-- ===================================================================== -->
+<!-- ===============  WANDER THEME (desktop restyle, additive)  =========== -->
+<!-- Restyles the existing Bootstrap UI into a clean, map-first, brand-blue  -->
+<!-- desktop layout inspired by the iPhone Wander app. Purely presentational -->
+<!-- overrides: no element ids/classes used by JS are renamed or removed.    -->
+<!-- ===================================================================== -->
+<style>
+  :root{
+    --w-brand:#185FA5;
+    --w-brand-2:#0f4c86;
+    --w-brand-tint:#eaf2fb;
+    --w-ink:#0c1a2b;
+    --w-muted:#6b7a8d;
+    --w-card:#ffffff;
+    --w-line:#e7edf3;
+    --w-radius:18px;
+    --w-radius-sm:12px;
+    --w-shadow:0 10px 34px rgba(16,44,86,.16);
+    --w-shadow-soft:0 6px 20px rgba(16,44,86,.10);
+    --w-font:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    --w-panel-w:372px;
+  }
+
+  html,body{height:100%;}
+  body{
+    font-family:var(--w-font);
+    background:#dfe7ef;                 /* neutral behind the full-bleed map */
+    color:var(--w-ink);
+    margin:0;
+    overflow:hidden;                    /* the map is the scroll surface, cards scroll internally */
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Full-bleed Leaflet map as the base layer ---- */
+  #map{
+    position:fixed !important;
+    inset:0 !important;
+    width:100vw !important;
+    height:100vh !important;
+    max-height:none !important;
+    margin:0 !important;
+    border-radius:0 !important;
+    z-index:0 !important;
+    background:#dfe7ef;
+  }
+  .leaflet-container{font-family:var(--w-font);}
+
+  /* Kill the stray spacer paragraphs the old layout used */
+  body > p{display:none;}
+
+  /* Jinja alert banners: float them at the top-center over the map */
+  body > .alert{
+    position:fixed; top:14px; left:50%; transform:translateX(-50%);
+    z-index:11000; max-width:min(620px,92vw); width:max-content;
+    border:none; border-radius:var(--w-radius-sm);
+    box-shadow:var(--w-shadow); font-family:var(--w-font);
+  }
+
+  /* ---- Floating brand header (top-left) ---- */
+  #wtheme-topbar{
+    position:fixed; top:16px; left:18px; z-index:1200;
+    width:var(--w-panel-w); max-width:calc(100vw - 36px);
+    margin:0; padding:12px 18px;
+    background:linear-gradient(135deg,var(--w-brand),var(--w-brand-2));
+    color:#fff; border-radius:var(--w-radius);
+    box-shadow:var(--w-shadow);
+    display:flex; align-items:center; gap:10px;
+  }
+  #wtheme-topbar h4{
+    margin:0; display:flex; align-items:center; gap:10px;
+    font-weight:700; font-size:19px; letter-spacing:.2px; color:#fff;
+  }
+  #wtheme-topbar .wtheme-brandmark{
+    width:32px; height:32px; border-radius:9px; flex:none; display:block;
+    object-fit:contain;
+  }
+  #wtheme-topbar .wtheme-brandmark::after{
+    content:none;
+    display:none;
+  }
+  #wtheme-topbar .wtheme-brandsub{
+    display:block; font-size:11.5px; font-weight:500;
+    letter-spacing:.02em; opacity:.85; margin-top:1px;
+  }
+  #wtheme-topbar .btn{
+    border-radius:999px; font-weight:600; padding:5px 16px;
+    border-color:rgba(255,255,255,.7); color:#fff;
+  }
+  #wtheme-topbar .btn:hover{background:rgba(255,255,255,.16); border-color:#fff; color:#fff;}
+
+  /* ---- Header actions (dark toggle + Exit) live INSIDE the brand bar now,
+         so nothing floats over the "Wander" title anymore ---- */
+  #wtheme-topbar h4{ flex:0 1 auto; min-width:0; }
+  #wtheme-topbar .wtheme-brandtext{ display:flex; flex-direction:column; line-height:1.12; }
+  .wtheme-top-actions{ display:flex; align-items:center; gap:14px; margin-left:auto; flex:none; }
+  .wtheme-dark{ margin:0; padding:0; min-height:auto; display:flex; align-items:center; cursor:pointer; }
+  .wtheme-dark .form-check-input{
+    margin:0; cursor:pointer; width:36px; height:20px; float:none;
+    background-color:rgba(255,255,255,.28); border-color:rgba(255,255,255,.55);
+  }
+  .wtheme-dark .form-check-input:checked{ background-color:#fff; border-color:#fff; }
+  .wtheme-dark .form-check-input:focus{ box-shadow:0 0 0 3px rgba(255,255,255,.22); border-color:#fff; }
+  #wtheme-topbar .btn{ white-space:nowrap; padding:5px 16px; flex:none; }
+  /* legacy standalone darkbar removed from markup; belt-and-braces hide */
+  #wtheme-darkbar{ display:none !important; }
+
+  /* ---- Left control column: the floating card stack ---- */
+  #wtheme-panel{
+    position:fixed; left:18px; top:104px; z-index:1100;
+    width:var(--w-panel-w); max-width:calc(100vw - 36px);
+    max-height:calc(100vh - 150px);   /* end above the bottom-left footer chip */
+    margin:0; padding:0 2px 16px 0;
+    overflow-y:auto; overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+  }
+  #wtheme-panel::-webkit-scrollbar{width:8px;}
+  #wtheme-panel::-webkit-scrollbar-thumb{background:rgba(16,44,86,.18); border-radius:8px;}
+  #wtheme-panel::-webkit-scrollbar-track{background:transparent;}
+
+  /* Turn the connect cluster + search + actions into stacked white cards.      */
+  /* Each direct card child of the panel becomes a rounded white card.          */
+  #wtheme-connect,
+  #wtheme-panel > .mb-3{
+    position:relative; z-index:2;   /* sit above the fixed #map (which is a panel descendant) */
+    background:var(--w-card);
+    border-radius:var(--w-radius);
+    box-shadow:var(--w-shadow-soft);
+    padding:13px 15px;
+    margin:0 0 10px 0;
+    border:1px solid var(--w-line);
+  }
+  /* small uppercase card title */
+  .wtheme-card-title{
+    font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.06em; color:var(--w-brand); margin-bottom:10px;
+  }
+  /* the bare connect <form> inside the connect card should not be a nested card */
+  #wtheme-connect > form,
+  #wtheme-connect > .mb-3{margin:0; padding:0; border:none; box-shadow:none; background:transparent;}
+  #wtheme-connect > br{display:none;}
+  /* space out the connect action buttons */
+  #wtheme-connect #connect,
+  #wtheme-connect #disconnect{margin-top:10px;}
+  /* hide empty/structural leftovers so the stack stays tidy */
+  #border{display:none !important;}
+  #dataList:empty{display:none !important;}
+  #wtheme-panel > form:empty,
+  #wtheme-panel > .mb-3:empty{display:none !important;}
+  #wtheme-panel > br{display:none;}
+
+  /* Section labels inside cards */
+  #wtheme-panel label{
+    font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; color:var(--w-muted); margin-bottom:6px;
+  }
+
+  /* Inputs + selects: rounded, clean */
+  #wtheme-panel .form-control,
+  #wtheme-panel .custom-select,
+  #wtheme-panel select,
+  #wtheme-panel input[type="text"]{
+    border-radius:var(--w-radius-sm);
+    border:1px solid #d5dee7;
+    padding:9px 12px; height:auto;
+    font-size:14px; color:var(--w-ink);
+    box-shadow:none; transition:border-color .15s, box-shadow .15s;
+  }
+  #wtheme-panel .form-control:focus,
+  #wtheme-panel .custom-select:focus,
+  #wtheme-panel select:focus{
+    border-color:var(--w-brand);
+    box-shadow:0 0 0 3px rgba(24,95,165,.15);
+    outline:none;
+  }
+
+  /* Primary buttons -> brand-blue pills */
+  #wtheme-panel .btn-primary,
+  #wtheme-topbar .btn-primary{
+    background:var(--w-brand); border:none; color:#fff;
+    border-radius:999px; font-weight:600; padding:9px 18px;
+    box-shadow:0 4px 12px rgba(24,95,165,.28);
+    transition:filter .15s, transform .05s, box-shadow .15s;
+  }
+  #wtheme-panel .btn-primary:hover{filter:brightness(1.06); box-shadow:0 6px 16px rgba(24,95,165,.34);}
+  #wtheme-panel .btn-primary:active{transform:translateY(1px);}
+  #wtheme-panel .btn-primary:disabled,
+  #wtheme-panel .btn-primary[disabled]{
+    background:#b7c6d6; box-shadow:none; color:#f3f7fb; filter:none; cursor:not-allowed;
+  }
+  #wtheme-panel .btn-danger{
+    background:#e63946; border:none; border-radius:999px; font-weight:600;
+    box-shadow:0 4px 12px rgba(230,57,70,.28);
+  }
+  #wtheme-panel .btn-outline-primary{
+    border-radius:999px; border-color:var(--w-brand); color:var(--w-brand); font-weight:600;
+  }
+  #wtheme-panel .btn-outline-primary:hover{background:var(--w-brand); color:#fff;}
+  #wtheme-panel .spinner-border{vertical-align:-2px;}
+
+  /* ---- The Location search card -> prominent floating search bar ---- */
+  #wtheme-search .row{flex-wrap:nowrap; align-items:center; gap:8px; margin:0;}
+  #wtheme-search .wtheme-setrow{margin-top:10px;}
+  #wtheme-search .col,
+  #wtheme-search .col-md-auto{padding:0;}
+  #wtheme-search label{
+    margin:0 2px 0 2px; white-space:nowrap; align-self:center;
+  }
+  #wtheme-search .form-control{
+    border-radius:999px; padding-left:16px; padding-right:16px;
+    background:#f4f7fb; border-color:#dbe4ee;
+  }
+  #wtheme-search .form-control:focus{background:#fff;}
+  #wtheme-search #search{
+    border-radius:999px; padding:9px 20px; white-space:nowrap;
+  }
+
+  /* Action buttons row (Simulate / Stop) sit full-width and even */
+  #wtheme-actions .row{margin:0 -6px;}
+  #wtheme-actions .col{padding:0 6px;}
+  #wtheme-actions .btn{margin-top:0;}
+
+  /* Buy-me-a-coffee: keep it, just center + shrink softly */
+  #wtheme-actions img{max-width:100%; height:auto; border-radius:8px; margin-top:4px;}
+
+  /* Version / help footer -> a small floating chip, bottom-left */
+  body > hr{display:none;}
+  #wtheme-footer{
+    position:fixed; left:18px; bottom:14px; z-index:1150;
+    max-width:var(--w-panel-w);
+    background:rgba(255,255,255,.92); color:var(--w-muted);
+    border:1px solid var(--w-line); border-radius:var(--w-radius-sm);
+    box-shadow:var(--w-shadow-soft);
+    padding:8px 14px; font-size:11.5px; line-height:1.5;
+    backdrop-filter:saturate(1.1) blur(4px);
+  }
+  #wtheme-footer hr{display:none;}
+  #wtheme-footer a{color:var(--w-brand); font-weight:600; text-decoration:none;}
+  #wtheme-footer a:hover{text-decoration:underline;}
+  body.dark-mode #wtheme-footer{background:rgba(24,34,47,.92); color:#aebccb; border-color:#243244;}
+
+  /* ---- Modals: soften to match ---- */
+  .modal-content{border:none; border-radius:var(--w-radius); box-shadow:var(--w-shadow); overflow:hidden;}
+  .modal-header{background:linear-gradient(135deg,var(--w-brand),var(--w-brand-2)); color:#fff; border:none;}
+  .modal-header .modal-title{color:#fff; font-weight:700;}
+  .modal-header .close{color:#fff; opacity:.9; text-shadow:none;}
+  .modal-body{padding:20px;}
+  .modal-footer .btn{border-radius:999px; font-weight:600;}
+
+  /* ---- Harmonize the existing mode toolbar + PoGo panel to brand-blue ----
+     (scoped, presentational only; does not alter their structure/ids)      */
+  .wmode-bar{border-radius:var(--w-radius-sm); box-shadow:var(--w-shadow-soft);}
+  .wmode-tbtn.on{background:var(--w-brand);}
+  .wmode-tbtn.on:hover{background:var(--w-brand-2);}
+  .wmode-card{border-radius:var(--w-radius); box-shadow:var(--w-shadow);}
+  .wmode-in:focus{border-color:var(--w-brand);}
+  .wmode-btn{background:var(--w-brand); border-radius:999px;}
+  .wmode-btn:hover{background:var(--w-brand-2);}
+  .wmode-btn.sm{border-radius:10px;}
+  .wmode-speed button.on{background:var(--w-brand); border-color:var(--w-brand);}
+  .wpogo-fab{border-radius:999px; box-shadow:var(--w-shadow);}
+
+  /* ---- Leaflet controls: round + soften to match the theme ---- */
+  .leaflet-control-zoom a,
+  .leaflet-bar a{border-radius:10px !important; color:var(--w-ink);}
+  .leaflet-control-zoom{
+    border:none !important; box-shadow:var(--w-shadow-soft) !important;
+    border-radius:12px !important; overflow:hidden;
+  }
+  .leaflet-control-attribution{
+    background:rgba(255,255,255,.82) !important; border-radius:8px 0 0 0;
+    font-size:10px;
+  }
+  /* Map controls (zoom + layer switcher) -> tidy stack in the bottom-left,
+     clear of the card column, the top-right mode bar, and the PoGo button. */
+  .leaflet-top.leaflet-left{ top:14px; right:14px; left:auto; bottom:auto; }
+  /* Hide the power-user GPX / drawing / playback controls for a clean consumer
+     layout — route modes live in the top-right toolbar instead. */
+  .leaflet-control-filelayer,
+  .easy-button-container,
+  .leaflet-draw,
+  .leaflet-control-send-gpx1,
+  .time-to-next-point-control-container{ display:none !important; }
+
+  /* ---- Dark mode: retint the theme surfaces ---- */
+  body.dark-mode{background:#0d1520; color:#e8eef5;}
+  body.dark-mode #map{background:#0d1520;}
+  body.dark-mode #wtheme-panel > form,
+  body.dark-mode #wtheme-panel > .mb-3,
+  body.dark-mode #wtheme-darkbar,
+  body.dark-mode .modal-content{
+    background:#18222f; border-color:#243244; color:#e8eef5;
+  }
+  body.dark-mode #wtheme-panel .form-control,
+  body.dark-mode #wtheme-panel .custom-select,
+  body.dark-mode #wtheme-panel select{
+    background:#0f1925; border-color:#2b3a4d; color:#e8eef5;
+  }
+  body.dark-mode #wtheme-search .form-control{background:#0f1925;}
+  body.dark-mode #wtheme-darkbar .form-check-label{color:#aebccb;}
+
+  /* ---- Responsive: on narrow desktop windows, let the column go bottom sheet ---- */
+  @media (max-width:720px){
+    body{overflow:auto;}
+    #wtheme-topbar{position:static; width:auto; margin:12px; border-radius:var(--w-radius);}
+    #wtheme-darkbar{position:static; margin:0 12px 8px; justify-content:flex-end;}
+    #wtheme-panel{
+      position:static; width:auto; max-height:none; margin:0 12px 12px;
+      overflow:visible;
+    }
+    #map{position:relative !important; height:60vh !important; margin:0 12px 12px !important; border-radius:var(--w-radius) !important;}
+    .leaflet-top.leaflet-left{top:10px; left:10px;}
+  }
+</style>
+
+</body>
+
+</html>
