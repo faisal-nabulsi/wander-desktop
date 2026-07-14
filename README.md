@@ -6,17 +6,16 @@
 
 # Wander Desktop 🌍
 
-### Put your iPhone anywhere on Earth — from your Mac or PC. Free, open-source, no jailbreak.
+### Put your iPhone anywhere on Earth — from your Mac or PC. No jailbreak.
 
-Teleport with a click, walk with a live joystick, or drive a full multi-stop route at realistic speed — all from a clean desktop map. The free alternative to paid tools like **iMyFone AnyTo** and **Tenorshare iAnyGo**.
+Teleport with a click, walk with a live joystick, or drive a full multi-stop route at realistic speed — all from a clean desktop map. A real free trial and one honest lifetime price — the affordable alternative to paid tools like **iMyFone AnyTo** and **Tenorshare iAnyGo**.
 
 <br/>
 
 [![Website](https://img.shields.io/badge/🌐_Website-wanderspoofer.com-4C8BF5?style=for-the-badge)](https://wanderspoofer.com)
-[![Download](https://img.shields.io/badge/⬇️_Download-Free-22C55E?style=for-the-badge)](https://wanderspoofer.com/#download)
+[![Download](https://img.shields.io/badge/⬇️_Download-Free_trial-22C55E?style=for-the-badge)](https://wanderspoofer.com/#download)
 [![Discord](https://img.shields.io/badge/💬_Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/gfHdsRXUVA)
 
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=flat-square)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-macOS_·_Windows-lightgrey?style=flat-square)
 [![GitHub stars](https://img.shields.io/github/stars/faisal-nabulsi/wander-desktop?style=flat-square&label=Stars)](https://github.com/faisal-nabulsi/wander-desktop/stargazers)
 [![No jailbreak](https://img.shields.io/badge/jailbreak-not_required-success?style=flat-square)](https://wanderspoofer.com)
@@ -31,7 +30,7 @@ Teleport with a click, walk with a live joystick, or drive a full multi-stop rou
 
 <a href="https://github.com/faisal-nabulsi/Wander"><img src="https://img.shields.io/badge/⭐_Star_Wander_on_GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="Star Wander on GitHub"/></a>
 
-**⭐ [Star Wander on GitHub](https://github.com/faisal-nabulsi/Wander) — it's free, takes one click, and helps more people find a free alternative to the paid spoofers.**
+**⭐ [Star Wander on GitHub](https://github.com/faisal-nabulsi/Wander) — it's free, takes one click, and helps more people find an affordable alternative to the paid spoofers.**
 
 <br/>
 
@@ -45,11 +44,17 @@ Teleport with a click, walk with a live joystick, or drive a full multi-stop rou
 
 ## ✨ What it does
 
-- 📍 **Teleport** — click anywhere on the map to set your iPhone's location instantly.
-- 🕹️ **Joystick walk** — a live stick to move in real time at walk / run / drive speed.
-- 🛣️ **Routes** — multi-stop drives that follow the real road with realistic **speed & ETA**.
-- 🎮 **PoGo jump-teleport** — long hops with a **cooldown timer** so you stay safe.
-- 📂 **GPX import** and 🌫️ **realistic GPS jitter** so a fixed spot never looks robotic.
+- 📍 **One-tap Teleport** — click the map, search a place, paste coordinates or a Plus Code, or spin a 3D globe and tap to land.
+- 🕹️ **Live Joystick walk** — a stick to move in real time at walk / run / bike / drive speed.
+- 🛣️ **Multi-stop Routes** — snap-to-roads drives with realistic **speed & ETA**, humanized motion, and auto-loop.
+- 🎮 **PoGo Mode** — jump-teleport with a **cooldown timer**, block-until-cooldown lock, and presets for Pokémon GO, Monster Hunter Now, Pikmin Bloom & Ingress.
+- 🌍 **3D globe, Street View preview & satellite/hybrid maps** — line up the exact spot before you go.
+- 🕒 **Local time & weather** at the spoofed spot, with a time-zone-mismatch heads-up.
+- 🔎 **AI natural-language teleport** ("take me to Times Square"), an **AI believable-day** generator, and a **raids / eggs / events** board.
+- ⭐ **Favorites, history & save-loops**, plus **record & replay** and a **timed itinerary** queue.
+- 📂 **GPX import & export**, **backup / restore**, and **sync** of saved places across devices.
+- 🖥️ **Multi-device _(beta)_** — hold one location across several connected iPhones at once.
+- 🆘 **Panic button**, **Dark Mode**, and **9-language** localization.
 - 🔌 **iPhone over USB** — plug in and go; connect over Wi-Fi too.
 - 🔓 **No jailbreak.** Works on a normal, up-to-date iPhone.
 - 💻 **Cross-platform** — macOS and Windows.
@@ -64,13 +69,15 @@ Start with a **free trial**. **Wander Pro** unlocks the movement modes (joystick
 
 | | **Wander Desktop** | iMyFone AnyTo | Tenorshare iAnyGo |
 |---|:---:|:---:|:---:|
-| **Price** | ✅ **Free** | 💰 Paid | 💰 Paid |
-| **Open source** | ✅ AGPL-3.0 | ❌ | ❌ |
+| **Real free trial** | ✅ | ⚠️ | ⚠️ |
+| **Price** | ✅ **$80 lifetime** | 💰 ~$120/yr | 💰 ~$120/yr |
 | **No jailbreak** | ✅ | ✅ | ✅ |
 | **Teleport** | ✅ | ✅ | ✅ |
 | **Live joystick** | ✅ | ✅ | ✅ |
 | **Multi-stop routes** | ✅ | ✅ | ✅ |
-| **GPX import** | ✅ | ⚠️ | ⚠️ |
+| **PoGo mode + cooldown** | ✅ | ⚠️ | ⚠️ |
+| **Multi-device (beta)** | ✅ | ❌ | ❌ |
+| **GPX import & export** | ✅ | ⚠️ | ⚠️ |
 | **macOS + Windows** | ✅ | ⚠️ | ⚠️ |
 
 ---
@@ -132,13 +139,13 @@ A local **Flask** server hosts a **Leaflet** map (`src/templates/map.html`) and 
 
 ## 🤔 Why Wander?
 
-iAnyGo, AnyTo, and the rest work, but they charge a subscription and ship closed-source binaries. Wander Desktop is **free and open under AGPL-3.0** — teleport, joystick, and routes from your Mac or PC, no jailbreak and no monthly bill. Read every line, build it yourself, see exactly what runs.
+iAnyGo, AnyTo, and the rest work, but they charge a yearly subscription and hand you a token trial. Wander Desktop gives you a **real free trial** and one honest **$80 lifetime** license that also unlocks iPhone, Android and the other desktop build — teleport, joystick, routes, PoGo Mode and multi-device from your Mac or PC, no jailbreak and no monthly bill.
 
 ---
 
 ## 📜 Credits & License
 
-Wander Desktop is a fork of [GeoPort](https://github.com/davesc63/GeoPort) (AGPL-3.0). Huge credit to the GeoPort project for the underlying `pymobiledevice3` device tunnel + location engine. This fork is likewise **AGPL-3.0** — see [LICENSE](LICENSE). If you distribute a modified version, you must make your source available under the same license.
+Wander Desktop builds on [GeoPort](https://github.com/davesc63/GeoPort) and is powered by [`pymobiledevice3`](https://github.com/doronz88/pymobiledevice3) for the device tunnel + location engine — huge thanks to those projects.
 
 *Use responsibly and legally. Spoofing your location may violate the Terms of Service of some apps and games.*
 
