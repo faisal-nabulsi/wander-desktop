@@ -2982,6 +2982,16 @@ function continueAfterDeveloperModeRequired() {
       <button class="wmode-btn sm" id="wmMultiImport" style="margin-bottom:9px" title="Load a GPX, KML, GeoJSON, CSV or lat,lng list as route waypoints">&#8681; Import route file</button>
       <input type="file" id="wmMultiFile" accept=".gpx,.kml,.geojson,.json,.csv,.txt" style="display:none">
       <div class="wmode-list" id="wmMultiList"></div>
+      <div class="wmode-hint" style="font-size:11px;opacity:.7;margin:-2px 0 6px">Drag a stop to reorder the trip.</div>
+      <label class="wmode-lbl">Travel by</label>
+      <select class="wmode-in" id="wmMultiMode" title="How to route between your stops, like Google Maps">
+        <option value="drive">Driving</option>
+        <option value="walk">Walking</option>
+        <option value="cycle">Cycling</option>
+        <option value="transit">Public transport</option>
+        <option value="boat">Boat (over water)</option>
+        <option value="plane">Plane (flight path)</option>
+      </select>
       <label class="wmode-lbl">Speed</label>
       <div class="wmode-speed" data-speed="multi">
         <button data-mps="1.4" class="on">Walk</button><button data-mps="5">Bike</button><button data-mps="13">Drive</button>
@@ -2992,7 +3002,7 @@ function continueAfterDeveloperModeRequired() {
           <option value="once">Once</option><option value="round">Round trip</option><option value="loop">Loop forever</option>
         </select></div>
       <label class="wmode-chk"><input type="checkbox" id="wmMultiRealistic" checked> Realistic movement (slow into turns)</label>
-      <button class="wmode-btn" id="wmMultiGo">Walk route</button>
+      <button class="wmode-btn" id="wmMultiGo">Start route</button>
       <div class="wmode-msg" id="wmMultiMsg"></div>
     </div>
 
@@ -3846,10 +3856,15 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   function renderList(el,arr){
     el.innerHTML='';
     arr.forEach(function(p,i){
-      var li=document.createElement('div');li.className='wmode-li';
+      var li=document.createElement('div');li.className='wmode-li';li.draggable=true;li.style.cursor='grab';
       var span=document.createElement('span');span.textContent=(i+1)+'. '+p[0].toFixed(5)+', '+p[1].toFixed(5);
       var x=document.createElement('button');x.innerHTML='&times;';x.title='Remove';
       x.addEventListener('click',function(){arr.splice(i,1);renderList(el,arr);});
+      // Drag to reorder the stops (Google-Maps-style). The list re-renders on drop.
+      li.addEventListener('dragstart',function(e){ e.dataTransfer.setData('text/plain',String(i)); e.dataTransfer.effectAllowed='move'; li.style.opacity='0.45'; });
+      li.addEventListener('dragend',function(){ li.style.opacity=''; });
+      li.addEventListener('dragover',function(e){ e.preventDefault(); e.dataTransfer.dropEffect='move'; });
+      li.addEventListener('drop',function(e){ e.preventDefault(); var from=parseInt(e.dataTransfer.getData('text/plain'),10); if(isNaN(from)||from===i) return; var moved=arr.splice(from,1)[0]; arr.splice(i,0,moved); renderList(el,arr); });
       li.appendChild(span);li.appendChild(x);el.appendChild(li);
     });
   }
@@ -4007,10 +4022,43 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   });
 
   // ---- Multi-Spot ----
+  // ---- Transport modes: pick how the route between stops is generated (like Google Maps) ----
+  var MODE_SPEEDS={drive:13, walk:1.4, cycle:5, transit:11, boat:9.7, plane:236}; // m/s
+  // Great-circle interpolation between two [lat,lng] points, ~segMeters apart (spherical, not linear).
+  function gcInterp(a,b,segMeters){
+    var la1=a[0]*Math.PI/180, lo1=a[1]*Math.PI/180, la2=b[0]*Math.PI/180, lo2=b[1]*Math.PI/180;
+    var dla=la2-la1, dlo=lo2-lo1;
+    var h=Math.sin(dla/2)*Math.sin(dla/2)+Math.cos(la1)*Math.cos(la2)*Math.sin(dlo/2)*Math.sin(dlo/2);
+    var d=2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
+    if(d===0) return [a.slice()];
+    var n=Math.max(1,Math.round(d*6371000/(segMeters||3000))), out=[];
+    for(var k=0;k<=n;k++){
+      var f=k/n, A=Math.sin((1-f)*d)/Math.sin(d), B=Math.sin(f*d)/Math.sin(d);
+      var x=A*Math.cos(la1)*Math.cos(lo1)+B*Math.cos(la2)*Math.cos(lo2);
+      var y=A*Math.cos(la1)*Math.sin(lo1)+B*Math.cos(la2)*Math.sin(lo2);
+      var z=A*Math.sin(la1)+B*Math.sin(la2);
+      out.push([Math.atan2(z,Math.sqrt(x*x+y*y))*180/Math.PI, Math.atan2(y,x)*180/Math.PI]);
+    }
+    return out;
+  }
+  // Boat = great-circle through every stop (over water); Plane = great-circle first->last only;
+  // road modes (drive/walk/cycle/transit) use the stops as-is (the server interpolates + snakes turns).
+  function buildModeRoute(mode,pts){
+    if(mode==='boat'){ var out=[pts[0].slice()]; for(var i=0;i<pts.length-1;i++){ out=out.concat(gcInterp(pts[i],pts[i+1],2000).slice(1)); } return out; }
+    if(mode==='plane'){ return gcInterp(pts[0], pts[pts.length-1], 8000); }
+    return pts;
+  }
+  function multiMode(){ return $('wmMultiMode') ? $('wmMultiMode').value : 'drive'; }
+  if($('wmMultiMode')){ $('wmMultiMode').addEventListener('change',function(){ speeds.multi=MODE_SPEEDS[multiMode()]||speeds.multi; }); }
+
   $('wmMultiGo').addEventListener('click',function(){
     if(multiPts.length<2){ msg($('wmMultiMsg'),'Add at least two points.',false); return; }
-    post('/wander/route',{points:multiPts,speed_mps:speeds.multi,loop:$('wmMultiLoop').value,jitter_m:jitterM(),realistic:$('wmMultiRealistic').checked})
-      .then(function(r){ msg($('wmMultiMsg'), r.ok?'Route started.':'Request failed.', r.ok); })
+    var mode=multiMode();
+    var pts=buildModeRoute(mode, multiPts);
+    // Boat/plane carry their own cruising speed; road modes honor the Speed buttons.
+    var spd=(mode==='boat'||mode==='plane') ? MODE_SPEEDS[mode] : speeds.multi;
+    post('/wander/route',{points:pts,speed_mps:spd,loop:$('wmMultiLoop').value,jitter_m:jitterM(),realistic:$('wmMultiRealistic').checked})
+      .then(function(r){ msg($('wmMultiMsg'), r.ok?'Route started ('+mode+').':'Request failed.', r.ok); })
       .catch(function(){ msg($('wmMultiMsg'),'Network error.',false); });
   });
 
