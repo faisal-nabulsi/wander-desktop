@@ -379,6 +379,25 @@ body.dark-mode .modal-footer button {
     <a href="https://wanderspoofer.com/vpn/" target="_blank" rel="noopener" class="wvpn-link">How IP matching works &rarr;</a>
   </div>
 
+  <!-- ===== AI: generate a believable day (Pro) — calls the secure Worker, key stays server-side ===== -->
+  <style>
+    #wtheme-ai .wai-btn{width:100%;padding:9px;border:none;border-radius:9px;background:linear-gradient(135deg,#7b5cff,#5a3fe0);color:#fff;font-weight:700;cursor:pointer}
+    #wtheme-ai .wai-btn:disabled{opacity:.6;cursor:default}
+    #wtheme-ai .wai-pro{display:none;font-size:9.5px;font-weight:800;letter-spacing:.4px;vertical-align:middle;padding:1px 6px;border-radius:6px;background:linear-gradient(135deg,#f0a500,#e07b00);color:#fff}
+    body:not(.wander-pro) #wtheme-ai .wai-pro{display:inline-block}
+    #wtheme-ai .wai-msg{font-size:12px;color:#6b7a8c;margin:6px 0 0;line-height:1.45}
+    #wtheme-ai .wai-list{margin:8px 0 0;padding:0;list-style:none;font-size:12.5px}
+    #wtheme-ai .wai-list li{padding:4px 0;border-top:1px solid #eef2f7;display:flex;justify-content:space-between;gap:8px}
+    #wtheme-ai .wai-run{width:100%;margin-top:8px;padding:8px;border:none;border-radius:9px;background:#185FA5;color:#fff;font-weight:600;cursor:pointer;display:none}
+  </style>
+  <div class="mb-3" id="wtheme-ai">
+    <div class="wtheme-card-title">Believable day <span class="wai-pro">PRO</span></div>
+    <button type="button" id="waiGen" class="wai-btn">&#10024; Generate a believable day</button>
+    <div id="waiMsg" class="wai-msg">A natural home &rarr; work &rarr; gym &rarr; home routine near your spot that you can replay.</div>
+    <ul id="waiList" class="wai-list"></ul>
+    <button type="button" id="waiRun" class="wai-run">&#9654; Replay this day as a route</button>
+  </div>
+
   <!-- ===== Recent teleports history + undo (scoped: wth-) — free, localStorage ===== -->
   <style>
     #wtheme-history .wth-empty{font-size:12.5px;color:#6b7a8c;padding:2px 0 4px}
@@ -3049,7 +3068,15 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
 <!-- PoGo now opens from the Movement modes toolbar (data-mode="pogo"); FAB removed for one clean surface -->
 <div class="wpogo-scrim" id="wpogoScrim" onclick="wpogoToggle(false)"></div>
 <div class="wpogo-panel" id="wpogoPanel">
-  <div class="wpogo-head"><h3>Pok&eacute;mon GO Mode</h3><button class="wpogo-close" onclick="wpogoToggle(false)" title="Close (Esc)" aria-label="Close">&times;</button></div>
+  <div class="wpogo-head"><h3 id="wpogoTitle">Pok&eacute;mon GO Mode</h3><button class="wpogo-close" onclick="wpogoToggle(false)" title="Close (Esc)" aria-label="Close">&times;</button></div>
+  <div id="wpogoGameRow" style="padding:2px 0 8px">
+    <select id="wpogoGame" style="width:100%;padding:6px 8px;border:1px solid #dbe3ec;border-radius:8px;font-size:13px;background:#fff" title="Same cooldown engine works for these location games">
+      <option value="Pok&eacute;mon GO">Pok&eacute;mon GO</option>
+      <option value="Monster Hunter Now">Monster Hunter Now</option>
+      <option value="Pikmin Bloom">Pikmin Bloom</option>
+      <option value="Ingress">Ingress</option>
+    </select>
+  </div>
   <div class="wpogo-cd" id="wpogoCd"></div>
   <label class="wpogo-block" id="wpogoBlockRow" title="Prevent a jump while a soft-ban cooldown is still counting down.">
     <input type="checkbox" id="wpogoBlock"> Block until cooldown ends
@@ -4294,6 +4321,8 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     }
   }
   window.wanderTrialStatus = () => trialCall("/trial/status");
+  // AI routine generator — calls the SAME Worker (Anthropic key stays server-side).
+  window.wanderAiRoutine = (lat, lng, opts) => trialCall("/ai/routine", Object.assign({ lat: lat, lng: lng }, opts || {}));
   window.wanderTrialConsume = async (mode, seconds) => {
     const body = (mode === "joystick") ? { mode, seconds: seconds || 30 } : { mode };
     const r = await trialCall("/trial/consume", body);
@@ -4772,6 +4801,71 @@ window.WanderOLC=(function(){
   render();
 })();
 </script>
+<!-- ===== AI "believable day" card logic — Pro-gated, calls window.wanderAiRoutine (the Worker) ===== -->
+<script>
+(function(){
+  var gen=document.getElementById('waiGen'), msg=document.getElementById('waiMsg'),
+      list=document.getElementById('waiList'), run=document.getElementById('waiRun');
+  if(!gen) return;
+  var lastPlaces=null;
+  function isPro(){ return window.WANDER_PRO===true || document.body.classList.contains('wander-pro'); }
+  function upsell(){ try{ window.open('https://wanderspoofer.com/pricing/','_blank','noopener'); }catch(e){} }
+  function curLatLng(){
+    if(window.marker && window.marker.getLatLng){ var p=window.marker.getLatLng(); return [p.lat,p.lng]; }
+    if(window.map && window.map.getCenter){ var c=window.map.getCenter(); return [c.lat,c.lng]; }
+    return null;
+  }
+  function esc(s){ return String(s==null?'':s).replace(/[<>&]/g,''); }
+  gen.addEventListener('click', function(){
+    if(!isPro()){ upsell(); return; }
+    if(typeof window.wanderAiRoutine!=='function'){ msg.textContent='Sign in to your Wander account to use AI.'; return; }
+    var ll=curLatLng();
+    if(!ll){ msg.textContent='Set a location on the map first.'; return; }
+    gen.disabled=true; msg.textContent='Generating…'; list.innerHTML=''; run.style.display='none'; lastPlaces=null;
+    window.wanderAiRoutine(ll[0], ll[1]).then(function(r){
+      gen.disabled=false;
+      if(!r){ msg.textContent='Something went wrong — try again.'; return; }
+      if(r.ok && r.routine && r.routine.places && r.routine.places.length){
+        lastPlaces=r.routine.places; msg.textContent='';
+        list.innerHTML = lastPlaces.map(function(p){
+          return '<li><span>'+esc(p.label)+' <span style="color:#9aa7b4">'+esc(p.kind)+'</span></span>'+
+                 '<span style="color:#6b7a8c">'+esc(p.arrive)+(p.depart?('–'+esc(p.depart)):'')+'</span></li>';
+        }).join('');
+        run.style.display=''; return;
+      }
+      if(r.error==='pro_required'){ upsell(); msg.textContent='AI is a Pro feature.'; return; }
+      if(r.error==='daily_limit'){ msg.textContent='You’ve used today’s AI generations (3/day). Try again tomorrow.'; return; }
+      if(r.error==='ai_not_configured'){ msg.textContent='AI isn’t switched on yet.'; return; }
+      if(r.unauthorized){ msg.textContent='Please sign in again.'; return; }
+      msg.textContent='Couldn’t generate right now — try again.';
+    }).catch(function(){ gen.disabled=false; msg.textContent='Couldn’t reach the AI service.'; });
+  });
+  run.addEventListener('click', function(){
+    if(!lastPlaces || !lastPlaces.length) return;
+    var pts = lastPlaces.map(function(p){ return [p.lat, p.lng]; })
+      .filter(function(x){ return typeof x[0]==='number' && typeof x[1]==='number'; });
+    if(pts.length<2){ msg.textContent='Not enough points to replay.'; return; }
+    fetch('/wander/route',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({points:pts, speed_mps:1.4, loop:'once', realistic:true})})
+      .then(function(){ if(window.wanderToast) window.wanderToast('▶ Replaying your believable day…'); })
+      .catch(function(){ if(window.wanderToast) window.wanderToast('Could not start replay.'); });
+  });
+})();
+</script>
+
+<!-- ===== Multi-game presets — same cooldown engine, different label ===== -->
+<script>
+(function(){
+  var sel=document.getElementById('wpogoGame'), title=document.getElementById('wpogoTitle');
+  if(!sel||!title) return;
+  var KEY='wanderPogoGame';
+  try{ var saved=localStorage.getItem(KEY); if(saved){ sel.value=saved; } }catch(e){}
+  function apply(){ title.textContent = sel.value + ' Mode'; try{ localStorage.setItem(KEY, sel.value); }catch(e){} }
+  sel.addEventListener('change', apply);
+  apply();
+})();
+</script>
+
 <!-- ===== Panic button — instantly clear the spoof and revert to real GPS, from anywhere ===== -->
 <style>
   #wPanic{position:fixed;left:16px;bottom:16px;z-index:99999;display:flex;align-items:center;gap:7px;
