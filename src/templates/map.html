@@ -239,6 +239,12 @@ body.dark-mode .modal-footer button {
 </head>
 
 <body>
+  <div id="wtheme-update-banner" role="alert">
+    <img class="wtheme-update-mark" src="{{ url_for('static', filename='wander-mark.png') }}" alt="Wander">
+    <span id="wtheme-update-text"></span>
+    <button type="button" id="wtheme-update-btn">Update</button>
+    <button type="button" id="wtheme-update-dismiss" aria-label="Dismiss">&times;</button>
+  </div>
   {% if version_message %}
         <div class="alert alert-warning" role="alert">
             {{ version_message }}
@@ -2394,8 +2400,36 @@ function continueAfterDeveloperModeRequired() {
 
 
 
+    function checkForUpdate() {
+        var banner = document.getElementById('wtheme-update-banner');
+        if (!banner) return;
+        var dismiss = document.getElementById('wtheme-update-dismiss');
+        if (dismiss) {
+            dismiss.addEventListener('click', function () {
+                banner.classList.remove('show');
+            });
+        }
+        fetch('/update-check')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data || !data.updateAvailable || !data.url) return;
+                var text = document.getElementById('wtheme-update-text');
+                if (text) text.textContent = 'Wander v' + data.version + ' is available';
+                var btn = document.getElementById('wtheme-update-btn');
+                if (btn) {
+                    btn.title = data.notes || '';
+                    btn.addEventListener('click', function () {
+                        window.open(data.url);
+                    });
+                }
+                banner.classList.add('show');
+            })
+            .catch(function () { /* never block the map on the update check */ });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
     console.log("test");
+    checkForUpdate();
     initializeMap();
     searchLocation();
     document.getElementById('rsdData').addEventListener('change', updateSetLocationButtonStatus);
@@ -3470,6 +3504,33 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     border:none; border-radius:var(--w-radius-sm);
     box-shadow:var(--w-shadow); font-family:var(--w-font);
   }
+
+  /* ---- Slim auto-update banner (top-center, dismissible) ---- */
+  #wtheme-update-banner{
+    display:none; position:fixed; top:14px; left:50%; transform:translateX(-50%);
+    z-index:12000; align-items:center; gap:10px;
+    max-width:min(620px,92vw); padding:8px 12px 8px 10px;
+    background:linear-gradient(135deg,var(--w-brand),var(--w-brand-2));
+    color:#fff; border-radius:999px; box-shadow:var(--w-shadow);
+    font:600 13.5px var(--w-font); letter-spacing:.1px;
+  }
+  #wtheme-update-banner.show{ display:flex; }
+  #wtheme-update-banner .wtheme-update-mark{
+    width:22px; height:22px; border-radius:6px; flex:none; object-fit:contain;
+  }
+  #wtheme-update-banner #wtheme-update-text{ white-space:nowrap; }
+  #wtheme-update-banner #wtheme-update-btn{
+    flex:none; border:none; border-radius:999px; cursor:pointer;
+    background:#fff; color:var(--w-brand); font:700 12.5px var(--w-font);
+    padding:5px 14px; transition:filter .15s;
+  }
+  #wtheme-update-banner #wtheme-update-btn:hover{ filter:brightness(.94); }
+  #wtheme-update-banner #wtheme-update-dismiss{
+    flex:none; border:none; background:transparent; color:#fff;
+    font-size:20px; line-height:1; cursor:pointer; padding:0 2px 2px;
+    opacity:.85; transition:opacity .15s;
+  }
+  #wtheme-update-banner #wtheme-update-dismiss:hover{ opacity:1; }
 
   /* ---- Floating brand header (top-left) ---- */
   #wtheme-topbar{

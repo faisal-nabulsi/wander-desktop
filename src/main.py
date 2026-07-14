@@ -114,6 +114,9 @@ CURRENT_VERSION_FILE = 'CURRENT_VERSION'
 BROADCAST_FILE = 'BROADCAST'
 APP_VERSION_NUMBER = "1.0.0"
 APP_VERSION_TYPE = "standard"
+# Single source of truth for the desktop app version used by the /update-check
+# route. Bump WANDER_VERSION here AND version in wander-site desktop.json each release.
+WANDER_VERSION = "1.0.0"
 terminate_tunnel_thread = False
 terminate_location_thread = False
 location_threads = []
@@ -1387,6 +1390,70 @@ def geocode():
     except Exception as e:
         logger.error(f"geocode error for {q!r}: {e}")
         return app.response_class('[]', mimetype='application/json')
+
+
+# --- Auto update check ------------------------------------------------------
+# Small in-process cache so repeated page loads don't re-hit the network.
+_update_cache = {'ts': 0, 'data': None}
+_UPDATE_CACHE_TTL = 900  # seconds
+
+
+def _version_tuple(v):
+    # Parse a dotted version string into a tuple of ints for a simple semver
+    # compare. Non-numeric / missing parts fall back to 0 so junk never crashes.
+    parts = []
+    for chunk in str(v).strip().split('.'):
+        num = ''.join(ch for ch in chunk if ch.isdigit())
+        parts.append(int(num) if num else 0)
+    # Pad to at least major.minor.patch so "1.0" and "1.0.0" compare equal and
+    # different-length versions never mis-order (e.g. "1.0" isn't seen as < "1.0.0").
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts)
+
+
+@app.route('/update-check', methods=['GET'])
+def update_check():
+    # Fetch the published desktop manifest, compare against WANDER_VERSION, and
+    # tell the UI whether a newer build exists plus the right download URL for
+    # this OS. Any failure is swallowed into {updateAvailable: false} so the map
+    # never blocks on the network.
+    now = time.time()
+    if _update_cache['data'] is not None and (now - _update_cache['ts']) < _UPDATE_CACHE_TTL:
+        return jsonify(_update_cache['data'])
+
+    result = {'updateAvailable': False}
+    try:
+        resp = requests.get(
+            'https://wanderspoofer.com/downloads/desktop.json',
+            timeout=4,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            remote_version = str(data.get('version', '')).strip()
+            # Darwin -> mac zip, Windows -> win installer. current_platform is
+            # sys.platform ('darwin' / 'win32' / 'linux').
+            if current_platform == 'darwin':
+                url = data.get('url_mac')
+            elif current_platform == 'win32':
+                url = data.get('url_win')
+            else:
+                url = None
+            if (remote_version and url
+                    and _version_tuple(remote_version) > _version_tuple(WANDER_VERSION)):
+                result = {
+                    'updateAvailable': True,
+                    'version': remote_version,
+                    'url': url,
+                    'notes': data.get('notes', ''),
+                }
+    except Exception as e:
+        logger.error(f"update-check error: {e}")
+        result = {'updateAvailable': False}
+
+    _update_cache['ts'] = now
+    _update_cache['data'] = result
+    return jsonify(result)
 
 
 def get_github_version():
