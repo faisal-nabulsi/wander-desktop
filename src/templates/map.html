@@ -364,6 +364,7 @@ body.dark-mode .modal-footer button {
     <div id="wtwClock" class="wtw-clock">—</div>
     <div id="wtwZone" class="wtw-zone"></div>
     <div id="wtwWeather" class="wtw-weather"></div>
+    <div id="wtwTz" style="display:none;font-size:11.5px;color:#b8541b;margin-top:6px;line-height:1.35"></div>
   </div>
 
   <!-- ===== IP alignment (optional VPN) — informational; links to the /vpn/ guide ===== -->
@@ -4665,6 +4666,16 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       if(!j||!j.current) return;
       offsetSec=j.utc_offset_seconds; tz=j.timezone||'';
       zoneEl.textContent=tz.replace(/_/g,' ');
+      // Anti-detection advisory: if the computer's own timezone differs from the spoofed
+      // location's by 1h+, some apps that compare GPS-vs-timezone may notice. Info only.
+      var tzEl=document.getElementById('wtwTz');
+      if(tzEl){
+        var devOffset=-new Date().getTimezoneOffset()*60;  // seconds ahead of UTC
+        if(Math.abs(offsetSec-devOffset)>=3600){
+          tzEl.textContent='⚠︎ Your computer’s time zone doesn’t match here — some apps compare the two.';
+          tzEl.style.display='';
+        } else { tzEl.style.display='none'; }
+      }
       var c=j.current.temperature_2m, code=j.current.weather_code, wind=j.current.wind_speed_10m;
       var f=Math.round(c*9/5+32), w=WMO[code]||['🌡️',''];
       wxEl.textContent=w[0]+' '+Math.round(c)+'°C / '+f+'°F'+(w[1]?' · '+w[1]:'')+' · 💨 '+Math.round(wind)+' km/h';
