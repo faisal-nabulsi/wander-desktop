@@ -1046,13 +1046,24 @@ fileLayerControlContainer.appendChild(saveMapButton.button);
 // Add the custom class to the EasyButton's container element
 saveMapButton.button.classList.add('leaflet-control-filelayer-custom');
 
-// Function to handle save button click
+// Function to handle save button click — export drawn markers/routes as GeoJSON, GPX or KML
 function handleSaveButtonClick() {
-    // Prompt for filename with default folder structure
-    var filename = prompt("Please enter the filename (e.g., map_data.geojson):", "map_data.geojson");
-    if (filename != null) {
-        var data = leafletToGeoJSON();
-        downloadGeoJSON(data, filename);
+    // Prompt for filename; the extension picks the format (.gpx / .kml / .geojson)
+    var filename = prompt("Save as — use .gpx, .kml or .geojson:", "map_data.gpx");
+    if (filename == null) return;
+    var lower = filename.toLowerCase();
+    var geo = leafletToGeoJSON();
+    if (!(geo.features && geo.features.length)) {
+        if (window.wanderToast) window.wanderToast("Nothing on the map to export yet");
+        return;
+    }
+    if (/\.gpx$/.test(lower)) {
+        downloadText(leafletToGPX(geo), filename, "application/gpx+xml");
+    } else if (/\.kml$/.test(lower)) {
+        downloadText(leafletToKML(geo), filename, "application/vnd.google-earth.kml+xml");
+    } else {
+        if (!/\.(geojson|json)$/.test(lower)) filename += ".geojson";
+        downloadText(JSON.stringify(geo), filename, "application/json");
     }
 }
 
@@ -1103,11 +1114,54 @@ function leafletToGeoJSON() {
     return geojson;
 }
 
-// Function to download GeoJSON file
-function downloadGeoJSON(data, filename) {
-    var blob = new Blob([JSON.stringify(data)], { type: "application/json" });
-    var url = URL.createObjectURL(blob);
+// Escape XML special characters for GPX/KML text nodes
+function wXmlEsc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
+// Convert the exported GeoJSON to GPX (points -> waypoints, lines -> tracks)
+function leafletToGPX(geo) {
+    var out = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    out += '<gpx version="1.1" creator="Wander" xmlns="http://www.topografix.com/GPX/1/1">\n';
+    var trks = '';
+    (geo.features || []).forEach(function(f) {
+        var g = f.geometry || {}, p = f.properties || {};
+        var nm = p.name || p.title || '';
+        if (g.type === 'Point') {
+            out += '  <wpt lat="' + g.coordinates[1] + '" lon="' + g.coordinates[0] + '">' +
+                (nm ? '<name>' + wXmlEsc(nm) + '</name>' : '') + '</wpt>\n';
+        } else if (g.type === 'LineString') {
+            trks += '  <trk>' + (nm ? '<name>' + wXmlEsc(nm) + '</name>' : '') + '<trkseg>\n';
+            g.coordinates.forEach(function(c) { trks += '    <trkpt lat="' + c[1] + '" lon="' + c[0] + '"></trkpt>\n'; });
+            trks += '  </trkseg></trk>\n';
+        }
+    });
+    return out + trks + '</gpx>\n';
+}
+
+// Convert the exported GeoJSON to KML (points/lines -> placemarks; KML coords are lon,lat,alt)
+function leafletToKML(geo) {
+    var out = '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n';
+    (geo.features || []).forEach(function(f) {
+        var g = f.geometry || {}, p = f.properties || {};
+        var nm = p.name || p.title || '';
+        if (g.type === 'Point') {
+            out += '  <Placemark>' + (nm ? '<name>' + wXmlEsc(nm) + '</name>' : '') +
+                '<Point><coordinates>' + g.coordinates[0] + ',' + g.coordinates[1] + ',0</coordinates></Point></Placemark>\n';
+        } else if (g.type === 'LineString') {
+            var coords = g.coordinates.map(function(c) { return c[0] + ',' + c[1] + ',0'; }).join(' ');
+            out += '  <Placemark>' + (nm ? '<name>' + wXmlEsc(nm) + '</name>' : '') +
+                '<LineString><tessellate>1</tessellate><coordinates>' + coords + '</coordinates></LineString></Placemark>\n';
+        }
+    });
+    return out + '</Document>\n</kml>\n';
+}
+
+// Generic text/blob download (GeoJSON, GPX, KML)
+function downloadText(text, filename, mime) {
+    var blob = new Blob([text], { type: mime || "text/plain" });
+    var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
     a.href = url;
     a.download = filename;
