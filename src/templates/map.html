@@ -349,6 +349,19 @@ body.dark-mode .modal-footer button {
   </div>
   {% endif %}
 
+  <!-- ===== Local time & weather at the spoofed spot (scoped: wtw-) — free, no API key ===== -->
+  <style>
+    #wtheme-timeweather .wtw-clock{font-size:22px;font-weight:700;color:#0f2438;line-height:1.1}
+    #wtheme-timeweather .wtw-zone{font-size:12px;color:#6b7a8c;margin-top:1px}
+    #wtheme-timeweather .wtw-weather{font-size:13.5px;color:#1a2330;margin-top:7px}
+  </style>
+  <div class="mb-3" id="wtheme-timeweather" style="display:none">
+    <div class="wtheme-card-title">Local time &amp; weather</div>
+    <div id="wtwClock" class="wtw-clock">—</div>
+    <div id="wtwZone" class="wtw-zone"></div>
+    <div id="wtwWeather" class="wtw-weather"></div>
+  </div>
+
 
 
 	<!-- Connect Device -->
@@ -4390,6 +4403,41 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
 })();
 </script>
 {% endif %}
+<!-- Local time & weather at the spoofed spot — free Open-Meteo, no API key, no cost -->
+<script>
+(function(){
+  var card=document.getElementById('wtheme-timeweather'),
+      clockEl=document.getElementById('wtwClock'), zoneEl=document.getElementById('wtwZone'), wxEl=document.getElementById('wtwWeather');
+  if(!card) return;
+  var offsetSec=null, tz='', tick=null, lastKey='', debounce=null;
+  var WMO={0:['☀️','Clear'],1:['🌤️','Mainly clear'],2:['⛅','Partly cloudy'],3:['☁️','Overcast'],45:['🌫️','Fog'],48:['🌫️','Rime fog'],51:['🌦️','Light drizzle'],53:['🌦️','Drizzle'],55:['🌦️','Dense drizzle'],56:['🌧️','Freezing drizzle'],57:['🌧️','Freezing drizzle'],61:['🌧️','Light rain'],63:['🌧️','Rain'],65:['🌧️','Heavy rain'],66:['🌧️','Freezing rain'],67:['🌧️','Freezing rain'],71:['🌨️','Light snow'],73:['🌨️','Snow'],75:['❄️','Heavy snow'],77:['🌨️','Snow grains'],80:['🌦️','Showers'],81:['🌦️','Showers'],82:['⛈️','Violent showers'],85:['🌨️','Snow showers'],86:['🌨️','Snow showers'],95:['⛈️','Thunderstorm'],96:['⛈️','Thunderstorm'],99:['⛈️','Thunderstorm']};
+  function renderClock(){
+    if(offsetSec===null) return;
+    var d=new Date(Date.now()+offsetSec*1000);
+    var h=d.getUTCHours(), m=d.getUTCMinutes(), ap=h<12?'AM':'PM', h12=h%12; if(h12===0) h12=12;
+    clockEl.textContent=h12+':'+(m<10?'0':'')+m+' '+ap;
+  }
+  function update(lat,lng){
+    var key=lat.toFixed(3)+','+lng.toFixed(3); if(key===lastKey) return; lastKey=key;
+    var url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lng+'&current=temperature_2m,weather_code,wind_speed_10m&timezone=auto';
+    fetch(url).then(function(r){return r.json();}).then(function(j){
+      if(!j||!j.current) return;
+      offsetSec=j.utc_offset_seconds; tz=j.timezone||'';
+      zoneEl.textContent=tz.replace(/_/g,' ');
+      var c=j.current.temperature_2m, code=j.current.weather_code, wind=j.current.wind_speed_10m;
+      var f=Math.round(c*9/5+32), w=WMO[code]||['🌡️',''];
+      wxEl.textContent=w[0]+' '+Math.round(c)+'°C / '+f+'°F'+(w[1]?' · '+w[1]:'')+' · 💨 '+Math.round(wind)+' km/h';
+      card.style.display=''; renderClock();
+      if(tick) clearInterval(tick); tick=setInterval(renderClock,10000);
+    }).catch(function(){});
+  }
+  function schedule(lat,lng){ if(typeof lat!=='number'||typeof lng!=='number') return; clearTimeout(debounce); debounce=setTimeout(function(){ update(lat,lng); },450); }
+  // Update whenever the app sets a location (map click, search, favorite, GPX, teleport).
+  if(typeof window.setCoordinates==='function'){ var _o=window.setCoordinates; window.setCoordinates=function(lat,lng){ try{ return _o.apply(this,arguments); } finally { schedule(lat,lng); } }; }
+  function hookMap(){ if(window.map&&window.map.on){ window.map.on('click',function(e){ if(e&&e.latlng) schedule(e.latlng.lat,e.latlng.lng); }); return true; } return false; }
+  if(!hookMap()){ var t=setInterval(function(){ if(hookMap()) clearInterval(t); },400); setTimeout(function(){clearInterval(t);},15000); }
+})();
+</script>
 </body>
 
 </html>
