@@ -326,8 +326,34 @@ body.dark-mode .modal-footer button {
       <input type="text" class="wfav-in" id="wfavName" placeholder="Name this spot (optional)" autocomplete="off">
       <button type="button" class="wfav-add" id="wfavAdd" title="Save the current pin / search location">★ Save</button>
     </div>
+    <div class="wfav-filterrow" id="wfavFilterRow" style="display:none">
+      <select class="wfav-filter" id="wfavFolderFilter" title="Filter by folder"><option value="">All folders</option></select>
+      <select class="wfav-filter" id="wfavTagFilter" title="Filter by tag"><option value="">All tags</option></select>
+    </div>
     <div class="wfav-list" id="wfavList"></div>
     <div class="wfav-empty" id="wfavEmpty">No saved places yet. Search or click the map, then Save.</div>
+  </div>
+
+  <!-- ===== Appearance / dark mode toggle (scoped: wappr-) — free ===== -->
+  <div class="mb-3" id="wtheme-appearance">
+    <div class="wtheme-card-title">Appearance</div>
+    <div class="wappr-seg" id="wapprSeg" role="group" aria-label="Appearance theme">
+      <button type="button" class="wappr-opt" data-theme="system">System</button>
+      <button type="button" class="wappr-opt" data-theme="light">Light</button>
+      <button type="button" class="wappr-opt" data-theme="dark">Dark</button>
+    </div>
+    <div class="wappr-note">Dark mode affects this panel only — the map keeps its own tiles.</div>
+  </div>
+
+  <!-- ===== Backup / Restore (scoped: wbak-) — free ===== -->
+  <div class="mb-3" id="wtheme-backup">
+    <div class="wtheme-card-title">Backup &amp; restore</div>
+    <div class="wbak-note">Save all your Wander data (favorites, loops, itinerary, teleport history, and more) to a file — or restore it on another machine.</div>
+    <div class="wbak-row">
+      <button type="button" class="wbak-btn wbak-backup" id="wbakBackup">⬇ Back up my data</button>
+      <button type="button" class="wbak-btn wbak-restore" id="wbakRestore">⬆ Restore from backup</button>
+    </div>
+    <input type="file" id="wbakFile" accept="application/json,.json" style="display:none">
   </div>
 
   <!-- ===== Street View teleport (scoped: wsv-) — only rendered when a Maps key is configured ===== -->
@@ -3453,6 +3479,107 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   .wfav-del:hover{color:#e63946}
   .wfav-empty{font:11.5px var(--w-font);color:var(--w-muted);line-height:1.4;text-align:center;padding:2px 0}
   body.dark-mode .wfav-empty,body.dark-mode .wfav-item .wfav-co{color:#aebccb}
+  /* favorites: folders / tags / notes metadata */
+  .wfav-filterrow{display:flex;gap:8px;margin-bottom:9px}
+  .wfav-filter{flex:1;min-width:0;box-sizing:border-box;border:1px solid var(--w-line);border-radius:var(--w-radius-sm);
+    padding:7px 9px;font:12px var(--w-font);background:var(--w-card);color:var(--w-ink);cursor:pointer}
+  .wfav-item{flex-wrap:wrap}
+  .wfav-item .wfav-info{flex:1 1 60%}
+  .wfav-item .wfav-folder{font:600 10px var(--w-font);color:var(--w-brand);text-transform:uppercase;letter-spacing:.04em;margin-bottom:1px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wfav-edit{flex:none;border:none;border-radius:8px;cursor:pointer;font:600 12px var(--w-font);padding:6px 8px;background:transparent;color:var(--w-muted);transition:color .15s}
+  .wfav-edit:hover{color:var(--w-brand)}
+  .wfav-tags{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+  .wfav-tag{font:600 10px var(--w-font);color:var(--w-brand);background:var(--w-brand-tint);border-radius:6px;padding:1px 6px}
+  .wfav-notes{flex:1 1 100%;font:11.5px var(--w-font);color:var(--w-muted);margin-top:3px;line-height:1.35;white-space:pre-wrap;word-break:break-word}
+  .wfav-editbox{flex:1 1 100%;display:flex;flex-direction:column;gap:6px;margin-top:6px}
+  .wfav-editbox input,.wfav-editbox textarea{box-sizing:border-box;width:100%;border:1px solid var(--w-line);border-radius:var(--w-radius-sm);
+    padding:7px 9px;font:12.5px var(--w-font);background:var(--w-card);color:var(--w-ink);resize:vertical}
+  .wfav-editbox .wfav-editactions{display:flex;gap:6px}
+  .wfav-editbox .wfav-save{background:var(--w-brand);color:#fff;border:none;border-radius:8px;padding:6px 12px;font:600 12px var(--w-font);cursor:pointer}
+  .wfav-editbox .wfav-cancel{background:transparent;color:var(--w-muted);border:none;border-radius:8px;padding:6px 12px;font:600 12px var(--w-font);cursor:pointer}
+
+  /* ---- Appearance card (scoped: wappr-) ---- */
+  .wappr-seg{display:flex;gap:4px;background:var(--w-brand-tint);border-radius:var(--w-radius-sm);padding:3px}
+  .wappr-opt{flex:1;border:none;background:transparent;border-radius:9px;padding:7px 0;font:600 12.5px var(--w-font);
+    color:var(--w-muted);cursor:pointer;transition:background .15s,color .15s}
+  .wappr-opt.on{background:var(--w-card);color:var(--w-brand);box-shadow:var(--w-shadow-soft)}
+  .wappr-note{font:11.5px var(--w-font);color:var(--w-muted);margin-top:8px;line-height:1.4;text-align:center}
+
+  /* ---- Backup card (scoped: wbak-) ---- */
+  .wbak-note{font:11.5px var(--w-font);color:var(--w-muted);line-height:1.4;margin-bottom:9px}
+  .wbak-row{display:flex;gap:8px}
+  .wbak-btn{flex:1;border:none;border-radius:var(--w-radius-sm);padding:9px 8px;font:600 12.5px var(--w-font);cursor:pointer;transition:filter .15s,transform .05s}
+  .wbak-btn:active{transform:translateY(1px)}
+  .wbak-backup{background:var(--w-brand);color:#fff}
+  .wbak-restore{background:var(--w-brand-tint);color:var(--w-brand)}
+  .wbak-btn:hover{filter:brightness(1.05)}
+
+  /* ============================================================= */
+  /* ====  DARK MODE (body.wander-dark) — panel surfaces only  ==== */
+  /* Darken the shared CSS variables so every card that reads them  */
+  /* (favorites, appearance, backup, etc.) turns dark automatically. */
+  body.wander-dark{
+    --w-ink:#e7eef6;
+    --w-muted:#9fb0c2;
+    --w-card:#1b2431;
+    --w-line:#2c3a4c;
+    --w-brand-tint:#24344a;
+    --w-shadow:0 10px 34px rgba(0,0,0,.5);
+    --w-shadow-soft:0 6px 20px rgba(0,0,0,.4);
+  }
+  body.wander-dark #wtheme-connect,
+  body.wander-dark #wtheme-panel > .mb-3{
+    background:var(--w-card);
+    border-color:var(--w-line);
+  }
+  body.wander-dark .wtheme-card-title{color:#7fb4ff}
+  body.wander-dark #wtheme-panel label{color:var(--w-muted)}
+  body.wander-dark #wtheme-panel .form-control,
+  body.wander-dark #wtheme-panel .custom-select,
+  body.wander-dark #wtheme-panel select,
+  body.wander-dark #wtheme-panel input[type="text"],
+  body.wander-dark .wfav-in,
+  body.wander-dark .wfav-filter,
+  body.wander-dark .wfav-editbox input,
+  body.wander-dark .wfav-editbox textarea{
+    background:#141c27;color:var(--w-ink);border-color:var(--w-line);
+  }
+  body.wander-dark #wtheme-panel .form-control::placeholder,
+  body.wander-dark .wfav-in::placeholder,
+  body.wander-dark .wfav-editbox input::placeholder,
+  body.wander-dark .wfav-editbox textarea::placeholder{color:#6b7c90}
+  body.wander-dark .wfav-item{background:#141c27;border-color:var(--w-line)}
+  body.wander-dark .wfav-item .wfav-nm{color:var(--w-ink)}
+  body.wander-dark .wappr-opt.on{background:#141c27;color:#7fb4ff}
+
+  /* System theme: follow the OS when no explicit choice is made */
+  @media (prefers-color-scheme: dark){
+    body.wander-theme-system{
+      --w-ink:#e7eef6;
+      --w-muted:#9fb0c2;
+      --w-card:#1b2431;
+      --w-line:#2c3a4c;
+      --w-brand-tint:#24344a;
+      --w-shadow:0 10px 34px rgba(0,0,0,.5);
+      --w-shadow-soft:0 6px 20px rgba(0,0,0,.4);
+    }
+    body.wander-theme-system #wtheme-connect,
+    body.wander-theme-system #wtheme-panel > .mb-3{background:var(--w-card);border-color:var(--w-line)}
+    body.wander-theme-system .wtheme-card-title{color:#7fb4ff}
+    body.wander-theme-system #wtheme-panel label{color:var(--w-muted)}
+    body.wander-theme-system #wtheme-panel .form-control,
+    body.wander-theme-system #wtheme-panel .custom-select,
+    body.wander-theme-system #wtheme-panel select,
+    body.wander-theme-system #wtheme-panel input[type="text"],
+    body.wander-theme-system .wfav-in,
+    body.wander-theme-system .wfav-filter,
+    body.wander-theme-system .wfav-editbox input,
+    body.wander-theme-system .wfav-editbox textarea{background:#141c27;color:var(--w-ink);border-color:var(--w-line)}
+    body.wander-theme-system .wfav-item{background:#141c27;border-color:var(--w-line)}
+    body.wander-theme-system .wfav-item .wfav-nm{color:var(--w-ink)}
+    body.wander-theme-system .wappr-opt.on{background:#141c27;color:#7fb4ff}
+  }
 </style>
 
 <!-- mode toolbar relocated into #wtheme-panel (see Movement modes card) -->
@@ -3935,13 +4062,26 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   function $(id){return document.getElementById(id);}
   var KEY='wander.favorites.v1';
   var listEl=$('wfavList'), emptyEl=$('wfavEmpty'), nameIn=$('wfavName'), addBtn=$('wfavAdd');
+  var filterRow=$('wfavFilterRow'), folderFilterEl=$('wfavFolderFilter'), tagFilterEl=$('wfavTagFilter');
   if(!listEl) return;   // card not present -> nothing to wire
+
+  var editingIdx=-1;   // which favorite is currently open in the inline editor (-1 = none)
 
   function load(){
     try{ var a=JSON.parse(localStorage.getItem(KEY)||'[]'); return Array.isArray(a)?a:[]; }
     catch(e){ return []; }
   }
   function save(a){ try{ localStorage.setItem(KEY,JSON.stringify(a)); }catch(e){} }
+
+  // Back-compat: old records may lack folder/tags/notes. Normalize on read for display.
+  function metaFolder(f){ return (f&&typeof f.folder==='string')?f.folder.trim():''; }
+  function metaTags(f){ return (f&&Array.isArray(f.tags))?f.tags.filter(function(t){return typeof t==='string'&&t.trim();}).map(function(t){return t.trim();}):[]; }
+  function metaNotes(f){ return (f&&typeof f.notes==='string')?f.notes:''; }
+  function parseTags(str){
+    return String(str||'').split(',').map(function(t){return t.trim();}).filter(function(t){return t;})
+      .filter(function(t,i,a){return a.indexOf(t)===i;});
+  }
+  // Expose current pin metadata for the backup card / other consumers if needed.
 
   // Best-available "current" coordinate: the search box, then the draggable marker.
   function currentCoord(){
@@ -3957,25 +4097,101 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
 
   function fmt(n){ return (Math.round(n*100000)/100000).toFixed(5); }
 
+  // Rebuild the folder + tag filter dropdowns from the current data, preserving selection.
+  function refreshFilters(favs){
+    if(!filterRow) return;
+    var folders={}, tags={};
+    favs.forEach(function(f){
+      var fd=metaFolder(f); if(fd) folders[fd]=1;
+      metaTags(f).forEach(function(t){ tags[t]=1; });
+    });
+    var folderKeys=Object.keys(folders).sort(), tagKeys=Object.keys(tags).sort();
+    var hasMeta=folderKeys.length||tagKeys.length;
+    filterRow.style.display=hasMeta?'':'none';
+    function fill(sel,keys,label){
+      if(!sel) return;
+      var cur=sel.value;
+      sel.innerHTML='';
+      var o0=document.createElement('option'); o0.value=''; o0.textContent=label; sel.appendChild(o0);
+      keys.forEach(function(k){ var o=document.createElement('option'); o.value=k; o.textContent=k; sel.appendChild(o); });
+      sel.value=keys.indexOf(cur)>=0?cur:'';
+    }
+    fill(folderFilterEl,folderKeys,'All folders');
+    fill(tagFilterEl,tagKeys,'All tags');
+  }
+
   function render(){
     var favs=load();
+    refreshFilters(favs);
+    var fFolder=folderFilterEl?folderFilterEl.value:'';
+    var fTag=tagFilterEl?tagFilterEl.value:'';
     listEl.innerHTML='';
-    emptyEl.style.display=favs.length?'none':'';
+    var shown=0;
     favs.forEach(function(f,i){
+      if(fFolder && metaFolder(f)!==fFolder) return;
+      if(fTag && metaTags(f).indexOf(fTag)<0) return;
+      shown++;
       var row=document.createElement('div'); row.className='wfav-item';
       var info=document.createElement('div'); info.className='wfav-info'; info.title='Center map on this spot';
+      var fd=metaFolder(f);
+      if(fd){ var fdEl=document.createElement('div'); fdEl.className='wfav-folder'; fdEl.textContent='📁 '+fd; info.appendChild(fdEl); }
       var nm=document.createElement('div'); nm.className='wfav-nm'; nm.textContent=f.name||('Spot '+(i+1));
       var co=document.createElement('div'); co.className='wfav-co'; co.textContent=fmt(f.lat)+', '+fmt(f.lng);
       info.appendChild(nm); info.appendChild(co);
       info.addEventListener('click',function(){ centerOn(f.lat,f.lng); });
       var go=document.createElement('button'); go.className='wfav-go'; go.textContent='Go'; go.title='Teleport here';
       go.addEventListener('click',function(){ centerOn(f.lat,f.lng); if(typeof window.wanderFavTeleport==='function') window.wanderFavTeleport(f.lat,f.lng); });
+      var edit=document.createElement('button'); edit.className='wfav-edit'; edit.innerHTML='✎'; edit.title='Edit folder, tags & notes';
+      edit.addEventListener('click',function(){ editingIdx=(editingIdx===i?-1:i); render(); });
       var del=document.createElement('button'); del.className='wfav-del'; del.innerHTML='&times;'; del.title='Remove';
-      del.addEventListener('click',function(){ var a=load(); a.splice(i,1); save(a); render(); });
-      row.appendChild(info); row.appendChild(go); row.appendChild(del);
+      del.addEventListener('click',function(){ var a=load(); a.splice(i,1); if(editingIdx===i)editingIdx=-1; save(a); render(); });
+      row.appendChild(info); row.appendChild(go); row.appendChild(edit); row.appendChild(del);
+
+      var tags=metaTags(f);
+      if(tags.length && editingIdx!==i){
+        var tagWrap=document.createElement('div'); tagWrap.className='wfav-tags';
+        tags.forEach(function(t){ var tEl=document.createElement('span'); tEl.className='wfav-tag'; tEl.textContent='#'+t; tagWrap.appendChild(tEl); });
+        row.appendChild(tagWrap);
+      }
+      var notes=metaNotes(f);
+      if(notes && editingIdx!==i){
+        var nEl=document.createElement('div'); nEl.className='wfav-notes'; nEl.textContent=notes; row.appendChild(nEl);
+      }
+
+      if(editingIdx===i){
+        var box=document.createElement('div'); box.className='wfav-editbox';
+        var folderInput=document.createElement('input'); folderInput.type='text'; folderInput.placeholder='Folder (e.g. Work trips)'; folderInput.value=fd;
+        var tagsInput=document.createElement('input'); tagsInput.type='text'; tagsInput.placeholder='Tags, comma separated'; tagsInput.value=tags.join(', ');
+        var notesInput=document.createElement('textarea'); notesInput.rows=2; notesInput.placeholder='Notes'; notesInput.value=notes;
+        var acts=document.createElement('div'); acts.className='wfav-editactions';
+        var saveBtn=document.createElement('button'); saveBtn.className='wfav-save'; saveBtn.textContent='Save';
+        var cancelBtn=document.createElement('button'); cancelBtn.className='wfav-cancel'; cancelBtn.textContent='Cancel';
+        saveBtn.addEventListener('click',function(){
+          var a=load();
+          if(a[i]){
+            a[i].folder=folderInput.value.trim();
+            a[i].tags=parseTags(tagsInput.value);
+            a[i].notes=notesInput.value;
+          }
+          save(a); editingIdx=-1; render();
+          if(window.wanderToast) window.wanderToast('✓ Favorite updated');
+        });
+        cancelBtn.addEventListener('click',function(){ editingIdx=-1; render(); });
+        acts.appendChild(saveBtn); acts.appendChild(cancelBtn);
+        box.appendChild(folderInput); box.appendChild(tagsInput); box.appendChild(notesInput); box.appendChild(acts);
+        row.appendChild(box);
+      }
+
       listEl.appendChild(row);
     });
+    emptyEl.style.display=shown?'none':'';
+    if(!favs.length){ emptyEl.textContent='No saved places yet. Search or click the map, then Save.'; }
+    else if(!shown){ emptyEl.textContent='No favorites match this filter.'; }
   }
+  window.wanderFavRender=render;
+
+  if(folderFilterEl) folderFilterEl.addEventListener('change',render);
+  if(tagFilterEl) tagFilterEl.addEventListener('change',render);
 
   // Center map + drop the pin + sync the classic coordinate state (so Set/Teleport works too).
   function centerOn(lat,lng){
@@ -3999,13 +4215,130 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     // Skip near-duplicates (~11 m) so repeated saves don't pile up.
     var dup=favs.some(function(f){ return Math.abs(f.lat-c.lat)<0.0001 && Math.abs(f.lng-c.lng)<0.0001; });
     if(dup){ if(window.wanderToast) window.wanderToast('That spot is already saved'); nameIn.value=''; return; }
-    favs.push({name:(nameIn.value||'').trim(), lat:c.lat, lng:c.lng, ts:Date.now()});
+    favs.push({name:(nameIn.value||'').trim(), lat:c.lat, lng:c.lng, ts:Date.now(), folder:'', tags:[], notes:''});
     save(favs); nameIn.value=''; render();
     if(window.wanderToast) window.wanderToast('★ Saved to Favorites');
   });
   nameIn.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); addBtn.click(); } });
 
   render();
+})();
+</script>
+
+<!-- ===== Appearance / dark-mode toggle (localStorage 'wanderTheme'; scoped: wappr-) — free ===== -->
+<script>
+(function(){
+  "use strict";
+  var KEY='wanderTheme';                 // 'system' | 'light' | 'dark'
+  var seg=document.getElementById('wapprSeg');
+  function read(){
+    try{ var v=localStorage.getItem(KEY); return (v==='light'||v==='dark'||v==='system')?v:'system'; }
+    catch(e){ return 'system'; }
+  }
+  function apply(mode){
+    var b=document.body;
+    b.classList.remove('wander-dark','wander-theme-system');
+    if(mode==='dark') b.classList.add('wander-dark');
+    else if(mode==='system') b.classList.add('wander-theme-system');
+    // 'light' -> no class, default light surfaces
+    if(seg){
+      var opts=seg.querySelectorAll('.wappr-opt');
+      for(var i=0;i<opts.length;i++){ opts[i].classList.toggle('on', opts[i].getAttribute('data-theme')===mode); }
+    }
+  }
+  function set(mode){
+    try{ localStorage.setItem(KEY,mode); }catch(e){}
+    apply(mode);
+  }
+  window.wanderApplyTheme=function(){ apply(read()); };
+  if(seg){
+    seg.addEventListener('click',function(e){
+      var btn=e.target&&e.target.closest?e.target.closest('.wappr-opt'):null;
+      if(!btn) return;
+      set(btn.getAttribute('data-theme'));
+    });
+  }
+  apply(read());   // apply saved preference on load
+})();
+</script>
+
+<!-- ===== Backup / Restore all Wander data (scoped: wbak-) — free ===== -->
+<script>
+(function(){
+  "use strict";
+  var backupBtn=document.getElementById('wbakBackup');
+  var restoreBtn=document.getElementById('wbakRestore');
+  var fileIn=document.getElementById('wbakFile');
+  if(!backupBtn||!restoreBtn||!fileIn) return;
+
+  // Collect every localStorage key whose name starts with 'wander' (covers
+  // favorites 'wander.favorites.v1', 'wanderSavedLoops', 'wanderItinerary',
+  // 'wanderTeleHistory', pogo game, 'wanderTheme', etc.).
+  function collect(){
+    var out={};
+    try{
+      for(var i=0;i<localStorage.length;i++){
+        var k=localStorage.key(i);
+        if(k && k.toLowerCase().indexOf('wander')===0){ out[k]=localStorage.getItem(k); }
+      }
+    }catch(e){}
+    return out;
+  }
+
+  backupBtn.addEventListener('click',function(){
+    var data=collect();
+    var payload={ app:'wander-desktop', kind:'wander-backup', version:1, exportedAt:new Date().toISOString(), data:data };
+    var json;
+    try{ json=JSON.stringify(payload,null,2); }
+    catch(e){ if(window.wanderToast) window.wanderToast('⚠️ Could not build backup'); return; }
+    try{
+      var blob=new Blob([json],{type:'application/json'});
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement('a');
+      var stamp=new Date().toISOString().slice(0,10);
+      a.href=url; a.download='wander-backup-'+stamp+'.json';
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); },0);
+      if(window.wanderToast) window.wanderToast('⬇ Backup downloaded ('+Object.keys(data).length+' items)');
+    }catch(e){ if(window.wanderToast) window.wanderToast('⚠️ Download failed'); }
+  });
+
+  restoreBtn.addEventListener('click',function(){ fileIn.value=''; fileIn.click(); });
+
+  fileIn.addEventListener('change',function(){
+    var file=fileIn.files&&fileIn.files[0];
+    if(!file) return;
+    var reader=new FileReader();
+    reader.onload=function(){
+      var parsed;
+      try{ parsed=JSON.parse(String(reader.result)); }
+      catch(e){ if(window.wanderToast) window.wanderToast('⚠️ Not a valid backup file — nothing changed'); return; }
+      // Accept either our wrapped payload {data:{...}} or a bare {key:value} map.
+      var data=(parsed && typeof parsed==='object' && parsed.data && typeof parsed.data==='object') ? parsed.data
+              : (parsed && typeof parsed==='object' ? parsed : null);
+      if(!data || typeof data!=='object' || Array.isArray(data)){
+        if(window.wanderToast) window.wanderToast('⚠️ Not a valid backup file — nothing changed'); return;
+      }
+      // MERGE: write each wander* key back without wiping keys not present in the file.
+      var restored=0;
+      try{
+        Object.keys(data).forEach(function(k){
+          if(typeof k==='string' && k.toLowerCase().indexOf('wander')===0){
+            var v=data[k];
+            if(typeof v==='string'){ localStorage.setItem(k,v); restored++; }
+            else if(v!=null){ try{ localStorage.setItem(k,JSON.stringify(v)); restored++; }catch(e){} }
+          }
+        });
+      }catch(e){ if(window.wanderToast) window.wanderToast('⚠️ Restore failed — nothing changed'); return; }
+      if(!restored){ if(window.wanderToast) window.wanderToast('⚠️ No Wander data found in that file'); return; }
+      // Reload affected cards live where we can; prompt a refresh for the rest.
+      try{ if(typeof window.wanderFavRender==='function') window.wanderFavRender(); }catch(e){}
+      try{ if(typeof window.wanderApplyTheme==='function') window.wanderApplyTheme(); }catch(e){}
+      if(window.wanderToast) window.wanderToast('✓ Restored '+restored+' items — refresh if a card looks stale');
+    };
+    reader.onerror=function(){ if(window.wanderToast) window.wanderToast('⚠️ Could not read that file — nothing changed'); };
+    reader.readAsText(file);
+  });
 })();
 </script>
 
