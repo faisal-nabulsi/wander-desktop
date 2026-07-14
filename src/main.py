@@ -135,7 +135,7 @@ APP_VERSION_NUMBER = "1.0.0"
 APP_VERSION_TYPE = "standard"
 # Single source of truth for the desktop app version used by the /update-check
 # route. Bump WANDER_VERSION here AND version in wander-site desktop.json each release.
-WANDER_VERSION = "1.9.0"
+WANDER_VERSION = "1.10.0"
 terminate_tunnel_thread = False
 terminate_location_thread = False
 location_threads = []

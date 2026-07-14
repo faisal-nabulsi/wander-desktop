@@ -5603,6 +5603,60 @@ window.WanderOLC=(function(){
 })();
 </script>
 
+<!-- ===== Language switcher + i18n (self-contained; translates card titles into 9 languages) ===== -->
+<script>
+(function(){
+  // key = English card-title text (leading text node), value = per-language translation.
+  var T = {
+    "Language":        {es:"Idioma",fr:"Langue",de:"Sprache",pt:"Idioma",it:"Lingua",ja:"言語",ko:"언어",zh:"语言",ru:"Язык"},
+    "Device":          {es:"Dispositivo",fr:"Appareil",de:"Gerät",pt:"Dispositivo",it:"Dispositivo",ja:"デバイス",ko:"기기",zh:"设备",ru:"Устройство"},
+    "Set location":    {es:"Ubicación",fr:"Emplacement",de:"Standort",pt:"Localização",it:"Posizione",ja:"場所を設定",ko:"위치 설정",zh:"设置位置",ru:"Задать место"},
+    "Movement modes":  {es:"Modos de movimiento",fr:"Modes de déplacement",de:"Bewegungsmodi",pt:"Modos de movimento",it:"Modalità di movimento",ja:"移動モード",ko:"이동 모드",zh:"移动模式",ru:"Режимы движения"},
+    "Local time & weather": {es:"Hora y clima local",fr:"Heure et météo locales",de:"Ortszeit & Wetter",pt:"Hora e clima locais",it:"Ora e meteo locali",ja:"現地時間と天気",ko:"현지 시간 및 날씨",zh:"当地时间和天气",ru:"Местное время и погода"},
+    "Match your IP":   {es:"Coincidir tu IP",fr:"Aligner votre IP",de:"IP anpassen",pt:"Combinar seu IP",it:"Allinea il tuo IP",ja:"IPを合わせる",ko:"IP 맞추기",zh:"匹配你的 IP",ru:"Совместить IP"},
+    "Believable day":  {es:"Día realista",fr:"Journée crédible",de:"Glaubwürdiger Tag",pt:"Dia realista",it:"Giornata credibile",ja:"自然な一日",ko:"그럴듯한 하루",zh:"逼真的一天",ru:"Правдоподобный день"},
+    "Saved loops":     {es:"Rutas guardadas",fr:"Boucles enregistrées",de:"Gespeicherte Schleifen",pt:"Ciclos salvos",it:"Percorsi salvati",ja:"保存したループ",ko:"저장된 루프",zh:"已保存循环",ru:"Сохранённые циклы"},
+    "Ask to go somewhere": {es:"Pide ir a un lugar",fr:"Demandez où aller",de:"Wohin möchtest du?",pt:"Peça para ir a um lugar",it:"Chiedi dove andare",ja:"行き先を入力",ko:"어디로 갈지 입력",zh:"说出想去的地方",ru:"Куда отправиться"},
+    "Raids & eggs today": {es:"Incursiones y huevos hoy",fr:"Raids et œufs du jour",de:"Raids & Eier heute",pt:"Reides e ovos hoje",it:"Raid e uova di oggi",ja:"本日のレイドとタマゴ",ko:"오늘의 레이드와 알",zh:"今日团战与蛋",ru:"Рейды и яйца сегодня"},
+    "3D globe":        {es:"Globo 3D",fr:"Globe 3D",de:"3D-Globus",pt:"Globo 3D",it:"Globo 3D",ja:"3Dグローブ",ko:"3D 지구본",zh:"3D 地球",ru:"3D-глобус"},
+    "Itinerary":       {es:"Itinerario",fr:"Itinéraire",de:"Reiseplan",pt:"Itinerário",it:"Itinerario",ja:"行程",ko:"일정",zh:"行程",ru:"Маршрут"},
+    "Multi-device":    {es:"Varios dispositivos",fr:"Multi-appareils",de:"Mehrere Geräte",pt:"Vários dispositivos",it:"Multi-dispositivo",ja:"複数デバイス",ko:"다중 기기",zh:"多设备",ru:"Несколько устройств"},
+    "Recent teleports":{es:"Teletransportes recientes",fr:"Téléportations récentes",de:"Letzte Teleports",pt:"Teletransportes recentes",it:"Teletrasporti recenti",ja:"最近のテレポート",ko:"최근 순간이동",zh:"最近传送",ru:"Недавние телепорты"},
+    "Appearance":      {es:"Apariencia",fr:"Apparence",de:"Darstellung",pt:"Aparência",it:"Aspetto",ja:"外観",ko:"화면 모드",zh:"外观",ru:"Оформление"},
+    "Favorites":       {es:"Favoritos",fr:"Favoris",de:"Favoriten",pt:"Favoritos",it:"Preferiti",ja:"お気に入り",ko:"즐겨찾기",zh:"收藏",ru:"Избранное"}
+  };
+  var LANGS = [["en","English"],["es","Español"],["fr","Français"],["de","Deutsch"],["pt","Português"],["it","Italiano"],["ja","日本語"],["ko","한국어"],["zh","简体中文"],["ru","Русский"]];
+  function leadTextNode(el){ for(var i=0;i<el.childNodes.length;i++){ var n=el.childNodes[i]; if(n.nodeType===3 && n.nodeValue.replace(/\s+/g,'')){ return n; } } return null; }
+  function apply(lang){
+    document.querySelectorAll('.wtheme-card-title').forEach(function(el){
+      var en=el.getAttribute('data-i18n-en');
+      if(en===null){ var t0=leadTextNode(el); en=t0?t0.nodeValue.trim():''; el.setAttribute('data-i18n-en',en); }
+      var tn=leadTextNode(el);
+      if(tn && T[en]){ tn.nodeValue=' '+((lang==='en')?en:(T[en][lang]||en))+' '; }
+    });
+    try{ localStorage.setItem('wanderLang',lang); }catch(e){}
+    document.documentElement.setAttribute('lang',lang);
+  }
+  window.wanderApplyLang=apply;
+  function build(){
+    var panel=document.getElementById('wtheme-panel'); if(!panel||document.getElementById('wtheme-lang')) return;
+    var card=document.createElement('div'); card.className='mb-3'; card.id='wtheme-lang';
+    var title=document.createElement('div'); title.className='wtheme-card-title'; title.textContent='Language'; card.appendChild(title);
+    var sel=document.createElement('select'); sel.style.cssText='width:100%;padding:6px 8px;border:1px solid #dbe3ec;border-radius:8px;font-size:13px;background:#fff';
+    LANGS.forEach(function(l){ var o=document.createElement('option'); o.value=l[0]; o.textContent=l[1]; sel.appendChild(o); });
+    card.appendChild(sel);
+    panel.insertBefore(card, panel.firstChild);
+    var saved; try{ saved=localStorage.getItem('wanderLang'); }catch(e){}
+    if(!saved){ saved=(navigator.language||'en').slice(0,2); }
+    if(!LANGS.some(function(l){return l[0]===saved;})) saved='en';
+    sel.value=saved;
+    sel.addEventListener('change', function(){ apply(sel.value); });
+    apply(saved);
+  }
+  if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', build); } else { build(); }
+})();
+</script>
+
 <!-- ===== Panic button — instantly clear the spoof and revert to real GPS, from anywhere ===== -->
 <style>
   #wPanic{position:fixed;left:16px;bottom:16px;z-index:99999;display:flex;align-items:center;gap:7px;
