@@ -2983,6 +2983,7 @@ function continueAfterDeveloperModeRequired() {
       <input type="file" id="wmMultiFile" accept=".gpx,.kml,.geojson,.json,.csv,.txt" style="display:none">
       <div class="wmode-list" id="wmMultiList"></div>
       <div class="wmode-hint" style="font-size:11px;opacity:.7;margin:-2px 0 6px">Drag a stop to reorder the trip.</div>
+      <button class="wmode-btn sm" id="wmMultiReverse" style="margin-bottom:9px" title="Flip the route direction (B to A)">&#8645; Reverse order</button>
       <label class="wmode-lbl">Travel by</label>
       <select class="wmode-in" id="wmMultiMode" title="How to route between your stops, like Google Maps">
         <option value="drive">Driving</option>
@@ -3875,6 +3876,11 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   }
   $('wmJumpAdd').addEventListener('click',function(){ addPoint('wmJumpLL',jumpPts,$('wmJumpList'),$('wmJumpMsg')); });
   $('wmMultiAdd').addEventListener('click',function(){ addPoint('wmMultiLL',multiPts,$('wmMultiList'),$('wmMultiMsg')); });
+  if($('wmMultiReverse')){ $('wmMultiReverse').addEventListener('click',function(){
+    if(multiPts.length<2){ msg($('wmMultiMsg'),'Add at least two points to reverse.',false); return; }
+    multiPts.reverse(); renderList($('wmMultiList'),multiPts);
+    msg($('wmMultiMsg'),'Route reversed ('+multiPts.length+' stops).',true);
+  }); }
 
   // ---- Import route file into Multi-Spot (GPX / KML / GeoJSON / CSV / lat,lng list) ----
   function validPt(la,ln){ return !isNaN(la)&&!isNaN(ln)&&la>=-90&&la<=90&&ln>=-180&&ln<=180&&!(la===0&&ln===0); }
@@ -4049,6 +4055,9 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     return pts;
   }
   function multiMode(){ return $('wmMultiMode') ? $('wmMultiMode').value : 'drive'; }
+  // Exposed so the Flight planner card (a separate script) can reuse the plane great-circle + speed.
+  window.wanderPlaneRoute = function(a,b){ return buildModeRoute('plane',[a,b]); };
+  window.wanderPlaneSpeed = MODE_SPEEDS.plane;
   if($('wmMultiMode')){ $('wmMultiMode').addEventListener('change',function(){ speeds.multi=MODE_SPEEDS[multiMode()]||speeds.multi; }); }
 
   $('wmMultiGo').addEventListener('click',function(){
@@ -5702,6 +5711,85 @@ window.WanderOLC=(function(){
   function apply(){ title.textContent = sel.value + ' Mode'; try{ localStorage.setItem(KEY, sel.value); }catch(e){} }
   sel.addEventListener('change', apply);
   apply();
+})();
+</script>
+
+<!-- ===== Flight planner — pick 2 airports (+ optional time range) and fly the great-circle ===== -->
+<script>
+(function(){
+  var AIRPORTS=[], depSel=null, arrSel=null, flights=[], pickedFlight=null;
+  function toRad(d){return d*Math.PI/180;}
+  function haversineKm(a,b){
+    var R=6371,dLat=toRad(b.y-a.y),dLng=toRad(b.x-a.x);
+    var s=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(toRad(a.y))*Math.cos(toRad(b.y))*Math.sin(dLng/2)*Math.sin(dLng/2);
+    return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));
+  }
+  function durationMin(a,b){ return Math.max(30, Math.round(haversineKm(a,b)/850*60)+30); }
+  function fmtT(mins){ mins=((mins%1440)+1440)%1440; var h=Math.floor(mins/60),m=mins%60; return (h<10?'0':'')+h+':'+(m<10?'0':'')+m; }
+  function airline(){ var c='ABCDEFGHIJKLMNOPQRSTUVWXYZ'; return c[Math.floor(Math.random()*26)]+c[Math.floor(Math.random()*26)]; }
+  function genFlights(a,b,startMin,endMin){
+    var dur=durationMin(a,b), out=[], n=Math.max(3,Math.min(8, Math.floor((endMin-startMin)/60)));
+    if(endMin<=startMin){ n=4; endMin=startMin+n*90; }
+    for(var i=0;i<n;i++){
+      var dep=Math.round(startMin+(endMin-startMin)*(i/Math.max(1,n-1))+(Math.random()*20-10));
+      out.push({num:airline()+(100+Math.floor(Math.random()*8900)), dep:dep, arr:dep+dur, dur:dur});
+    }
+    out.sort(function(p,q){return p.dep-q.dep;});
+    return out;
+  }
+  function matchAirports(q){
+    q=(q||'').toLowerCase().trim(); if(!q) return [];
+    var out=[]; for(var i=0;i<AIRPORTS.length && out.length<8;i++){ var a=AIRPORTS[i];
+      if(a.i.toLowerCase().indexOf(q)===0 || a.n.toLowerCase().indexOf(q)>=0) out.push(a); }
+    return out;
+  }
+  function build(){
+    var panel=document.getElementById('wtheme-panel'); if(!panel||document.getElementById('wtheme-flight')) return;
+    var card=document.createElement('div'); card.className='mb-3'; card.id='wtheme-flight';
+    card.innerHTML='<div class="wtheme-card-title">Flight planner</div>'+
+      '<div style="font-size:11px;opacity:.7;margin-bottom:6px">Pick two airports (or add a time range to choose a flight), then fly the route.</div>';
+    function mkField(ph){ var w=document.createElement('div'); w.style.position='relative';
+      var inp=document.createElement('input'); inp.placeholder=ph; inp.style.cssText='width:100%;padding:6px 8px;border:1px solid #dbe3ec;border-radius:8px;font-size:13px;margin-bottom:6px;background:#fff';
+      var dd=document.createElement('div'); dd.style.cssText='position:absolute;z-index:20;left:0;right:0;top:34px;background:#fff;border:1px solid #dbe3ec;border-radius:8px;max-height:160px;overflow:auto;display:none;box-shadow:0 4px 14px rgba(0,0,0,.12)';
+      w.appendChild(inp); w.appendChild(dd); return {w:w,inp:inp,dd:dd}; }
+    var dep=mkField('From — IATA or city'), arr=mkField('To — IATA or city');
+    function wire(f,setter){ f.inp.addEventListener('input',function(){
+      var m=matchAirports(f.inp.value); f.dd.innerHTML=''; if(!m.length){ f.dd.style.display='none'; setter(null); return; }
+      m.forEach(function(a){ var it=document.createElement('div'); it.style.cssText='padding:6px 8px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f3f7';
+        it.textContent=a.i+' — '+a.n+' ('+a.c+')'; it.addEventListener('click',function(){ f.inp.value=a.i+' — '+a.n; setter(a); f.dd.style.display='none'; }); f.dd.appendChild(it); });
+      f.dd.style.display='block'; }); }
+    wire(dep,function(a){depSel=a;}); wire(arr,function(a){arrSel=a;});
+    card.appendChild(dep.w); card.appendChild(arr.w);
+    var tr=document.createElement('div'); tr.style.cssText='display:flex;gap:6px;align-items:center;margin-bottom:6px';
+    var t1=document.createElement('input'); t1.type='time'; t1.title='Earliest departure'; t1.style.cssText='flex:1;padding:5px;border:1px solid #dbe3ec;border-radius:8px;font-size:12px';
+    var t2=document.createElement('input'); t2.type='time'; t2.title='Latest departure'; t2.style.cssText='flex:1;padding:5px;border:1px solid #dbe3ec;border-radius:8px;font-size:12px';
+    var findB=document.createElement('button'); findB.className='wmode-btn sm'; findB.textContent='Find flights'; findB.style.margin='0';
+    tr.appendChild(t1); tr.appendChild(t2); tr.appendChild(findB); card.appendChild(tr);
+    var list=document.createElement('div'); list.style.cssText='margin-bottom:6px'; card.appendChild(list);
+    var flyB=document.createElement('button'); flyB.className='wmode-btn'; flyB.textContent='Fly it'; card.appendChild(flyB);
+    var msg=document.createElement('div'); msg.className='wmode-msg'; card.appendChild(msg);
+    function showMsg(t,ok){ msg.textContent=t; msg.style.color=ok?'#137333':'#b3261e'; }
+    findB.addEventListener('click',function(){
+      if(!depSel||!arrSel){ showMsg('Pick both airports first.',false); return; }
+      var s=t1.value?parseInt(t1.value.split(':')[0])*60+parseInt(t1.value.split(':')[1]):9*60;
+      var e=t2.value?parseInt(t2.value.split(':')[0])*60+parseInt(t2.value.split(':')[1]):17*60;
+      flights=genFlights(depSel,arrSel,s,e); pickedFlight=null; list.innerHTML='';
+      flights.forEach(function(fl){ var it=document.createElement('div'); it.style.cssText='padding:6px 8px;border:1px solid #dbe3ec;border-radius:8px;margin-bottom:4px;cursor:pointer;font-size:12px';
+        it.textContent=fl.num+'  '+fmtT(fl.dep)+' → '+fmtT(fl.arr)+'  ('+Math.floor(fl.dur/60)+'h '+(fl.dur%60)+'m)';
+        it.addEventListener('click',function(){ pickedFlight=fl; Array.prototype.forEach.call(list.children,function(c){c.style.background='';}); it.style.background='#e6f0ff'; showMsg('Selected '+fl.num+'.',true); }); list.appendChild(it); });
+      showMsg(flights.length+' flights '+depSel.i+' → '+arrSel.i+'. Pick one, or just Fly it.',true);
+    });
+    flyB.addEventListener('click',function(){
+      if(!depSel||!arrSel){ showMsg('Pick both airports first.',false); return; }
+      if(!window.wanderPlaneRoute){ showMsg('Plane mode unavailable.',false); return; }
+      var pts=window.wanderPlaneRoute([depSel.y,depSel.x],[arrSel.y,arrSel.x]);
+      fetch('/wander/route',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({points:pts,speed_mps:window.wanderPlaneSpeed||236,loop:'once',realistic:true})})
+        .then(function(r){ showMsg(r.ok?('✈ Flying '+depSel.i+' → '+arrSel.i+(pickedFlight?' ('+pickedFlight.num+')':'')):'Request failed.', r.ok); })
+        .catch(function(){ showMsg('Network error.',false); });
+    });
+    panel.insertBefore(card, panel.firstChild);
+  }
+  fetch('/static/airports.json').then(function(r){return r.json();}).then(function(d){ AIRPORTS=d||[]; if(AIRPORTS.length) build(); }).catch(function(){});
 })();
 </script>
 
