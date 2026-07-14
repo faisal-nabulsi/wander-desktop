@@ -44,22 +44,27 @@ Teleport with a click, walk with a live joystick, or drive a full multi-stop rou
 
 ## ✨ What it does
 
-- 📍 **One-tap Teleport** — click the map, search a place, paste coordinates or a Plus Code, or spin a 3D globe and tap to land.
-- 🕹️ **Live Joystick walk** — a stick to move in real time at walk / run / bike / drive speed.
-- 🛣️ **Multi-stop Routes** — snap-to-roads drives with realistic **speed & ETA**, humanized motion, and auto-loop.
-- 🎮 **PoGo Mode** — jump-teleport with a **cooldown timer**, block-until-cooldown lock, and presets for Pokémon GO, Monster Hunter Now, Pikmin Bloom & Ingress.
-- 🌍 **3D globe, Street View preview & satellite/hybrid maps** — line up the exact spot before you go.
-- 🕒 **Local time & weather** at the spoofed spot, with a time-zone-mismatch heads-up.
-- 🔎 **AI natural-language teleport** ("take me to Times Square"), an **AI believable-day** generator, and a **raids / eggs / events** board.
-- ⭐ **Favorites, history & save-loops**, plus **record & replay** and a **timed itinerary** queue.
-- 📂 **GPX import & export**, **backup / restore**, and **sync** of saved places across devices.
+- 📍 **One-tap Teleport** — click the map, search a place (address autocomplete), paste coordinates or a Plus Code, teleport from Street View, or spin a 3D globe and tap to land.
+- 🕹️ **Live Joystick walk** — a 360° stick to move in real time, with walk / run / bike / drive speed presets.
+- 🛣️ **Multi-stop Routes** — snap-to-roads drives with realistic **speed & ETA**, humanized motion, GPS jitter, and auto-loop.
+- 🚗 **Transport modes** — travel a route by **Driving, Walking, Cycling, Public transport** (road route at transit speed with station dwells), **Boat** (over-water great-circle), or **Plane** (great-circle flight path). *(Real in-flight altitude is Android-only; desktop flies the path without altitude.)*
+- ✈️ **Flight planner** — pick two airports (searchable) or add a time range to choose from a list of flights, then fly the great-circle route. Uses a bundled airport dataset — no API.
+- 🔀 **Drag-to-reorder** multi-stop waypoints, plus one-tap **Reverse route**.
+- 🎮 **PoGo Mode** — jump-teleport with a **cooldown timer**, block-until-cooldown guard, presets for Pokémon GO, Monster Hunter Now, Pikmin Bloom & Ingress, and a **raids / eggs / events** board.
+- 🌍 **3D globe, Street View teleport & satellite/hybrid maps** — line up the exact spot before you go.
+- 🕒 **Local time** at the spoofed spot, with a time-zone-mismatch heads-up and a **VPN / IP-alignment** card.
+- 🔎 **AI natural-language teleport** ("take me to Times Square") and an **AI believable-day** generator _(Pro)_.
+- ⭐ **Favorites** with **folders, tags & notes**, plus **teleport history** and save-loops.
+- 📂 **GPX & KML import / export** and **backup / restore** of your data.
 - 🖥️ **Multi-device _(beta)_** — hold one location across several connected iPhones at once.
-- 🆘 **Panic button**, **Dark Mode**, and **9-language** localization.
+- 🌙 **Dark Mode** and app localization in **9–10 languages**.
 - 🔌 **iPhone over USB** — plug in and go; connect over Wi-Fi too.
 - 🔓 **No jailbreak.** Works on a normal, up-to-date iPhone.
 - 💻 **Cross-platform** — macOS and Windows.
 
-Start with a **free trial**. **Wander Pro** unlocks the movement modes (joystick, routes, and more).
+Start with a **free trial**. **Wander Pro** unlocks the movement modes (joystick, routes, and more) and the AI features.
+
+> **Mobile-only:** geofence auto-revert, scheduling (be somewhere during set hours), and downloadable offline maps live on the **iPhone & Android** apps — the desktop drives a tethered phone, so those "moving device" features don't apply here. See the whole family at [wanderspoofer.com](https://wanderspoofer.com).
 
 > Also on **iPhone, Android, Mac, and Windows** — see the whole family at [wanderspoofer.com](https://wanderspoofer.com).
 
@@ -75,9 +80,10 @@ Start with a **free trial**. **Wander Pro** unlocks the movement modes (joystick
 | **Teleport** | ✅ | ✅ | ✅ |
 | **Live joystick** | ✅ | ✅ | ✅ |
 | **Multi-stop routes** | ✅ | ✅ | ✅ |
+| **Transport modes + flight planner** | ✅ | ❌ | ❌ |
 | **PoGo mode + cooldown** | ✅ | ⚠️ | ⚠️ |
 | **Multi-device (beta)** | ✅ | ❌ | ❌ |
-| **GPX import & export** | ✅ | ⚠️ | ⚠️ |
+| **GPX & KML import / export** | ✅ | ⚠️ | ⚠️ |
 | **macOS + Windows** | ✅ | ⚠️ | ⚠️ |
 
 ---
