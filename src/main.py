@@ -86,6 +86,25 @@ app = Flask(__name__,
             template_folder=os.path.join(_RES, 'templates'),
             static_folder=os.path.join(_RES, 'static'))
 
+
+# Optional Google Maps API key powering the Street View teleport panel. Resolved (in order):
+#   1. the WANDER_MAPS_KEY environment variable, or
+#   2. data/config.json  ->  {"google_maps_key": "..."}  (gitignored; bundled at build time)
+# If neither is set the key stays "" and the Street View UI is hidden — the app works
+# exactly as before, with zero extra network calls.
+def _load_maps_key():
+    env = os.environ.get('WANDER_MAPS_KEY', '').strip()
+    if env:
+        return env
+    try:
+        import json as _json
+        with open(os.path.join(_RES, 'data', 'config.json'), 'r', encoding='utf-8') as f:
+            return str(_json.load(f).get('google_maps_key', '')).strip()
+    except Exception:
+        return ''
+
+GOOGLE_MAPS_KEY = _load_maps_key()
+
 # Define constants
 # Get the home directory of the current user
 home_dir = os.path.expanduser("~")
@@ -1915,7 +1934,7 @@ def index():
     return render_template('map.html', version_message=version_message, github_broadcast=github_broadcast,
                            user_locale=user_locale, app_version_num=APP_VERSION_NUMBER,
                            app_version_type=APP_VERSION_TYPE, error_message=error_message, current_platform=platform,
-                           sudo_message=sudo_message)
+                           sudo_message=sudo_message, google_maps_key=GOOGLE_MAPS_KEY)
 
 
 def open_browser():

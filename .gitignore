@@ -9,3 +9,6 @@ __pycache__/
 .DS_Store
 map.html.pre-merge*
 images/*.gif
+
+# Google Maps key — real key lives here, never committed
+src/data/config.json

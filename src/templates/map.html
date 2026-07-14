@@ -330,6 +330,25 @@ body.dark-mode .modal-footer button {
     <div class="wfav-empty" id="wfavEmpty">No saved places yet. Search or click the map, then Save.</div>
   </div>
 
+  <!-- ===== Street View teleport (scoped: wsv-) — only rendered when a Maps key is configured ===== -->
+  {% if google_maps_key %}
+  <style>
+    #wtheme-streetview .wsv-toggle{float:right;font-size:11px;padding:2px 9px;border:none;border-radius:7px;background:#185FA5;color:#fff;cursor:pointer}
+    #wsvPano{width:100%;height:200px;border-radius:10px;overflow:hidden;background:#0f1b2a;margin:6px 0;display:none}
+    #wsvMsg{font-size:12px;color:#6b7a8c;margin:4px 0 6px}
+    #wsvGo{width:100%;padding:8px;border:none;border-radius:9px;background:#185FA5;color:#fff;font-weight:600;cursor:pointer}
+    #wsvGo:disabled{background:#9db4cc;cursor:not-allowed}
+  </style>
+  <div class="mb-3" id="wtheme-streetview">
+    <div class="wtheme-card-title">Street View <button type="button" id="wsvToggle" class="wsv-toggle">Show</button></div>
+    <div id="wsvBody" style="display:none">
+      <div id="wsvPano"></div>
+      <div id="wsvMsg">Click a spot on the map to look around it in Street View.</div>
+      <button type="button" id="wsvGo" disabled>📍 Teleport to this view</button>
+    </div>
+  </div>
+  {% endif %}
+
 
 
 	<!-- Connect Device -->
@@ -4300,6 +4319,77 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   });
 </script>
 
+{% if google_maps_key %}
+<!-- Street View teleport — loads the Google Maps JS API only when the user opens the panel -->
+<script>
+(function(){
+  var KEY = "{{ google_maps_key }}";
+  if(!KEY) return;
+  var body=document.getElementById('wsvBody'), toggle=document.getElementById('wsvToggle'),
+      panoEl=document.getElementById('wsvPano'), msg=document.getElementById('wsvMsg'), goBtn=document.getElementById('wsvGo');
+  if(!toggle||!panoEl) return;
+  var pano=null, svc=null, target=null, open=false, gmReady=false;
+
+  // Called by the Google Maps script tag once the API has loaded.
+  window.wanderInitStreetView=function(){
+    gmReady=true;
+    try{
+      svc=new google.maps.StreetViewService();
+      pano=new google.maps.StreetViewPanorama(panoEl,{addressControl:false,fullscreenControl:false,motionTrackingControl:false,zoomControl:true});
+      pano.addListener('position_changed',function(){ var p=pano.getPosition&&pano.getPosition(); if(p){ target={lat:p.lat(),lng:p.lng()}; } });
+    }catch(e){ msg.textContent='Street View failed to load — check the Maps API key restrictions.'; }
+  };
+
+  function loadGM(){
+    if(window.google&&window.google.maps){ if(!gmReady) window.wanderInitStreetView(); return; }
+    if(document.getElementById('wsv-gmaps')) return; // already loading
+    var s=document.createElement('script'); s.id='wsv-gmaps';
+    s.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(KEY)+'&callback=wanderInitStreetView&loading=async';
+    s.async=true; s.defer=true;
+    s.onerror=function(){ msg.textContent='Could not load Google Maps — check the key + your connection.'; };
+    document.head.appendChild(s);
+  }
+
+  function showAt(lat,lng){
+    if(!open) return;
+    if(!gmReady){ msg.textContent='Loading Street View…'; msg.style.display=''; return; }
+    svc.getPanorama({location:{lat:lat,lng:lng},radius:120},function(data,status){
+      if(status===google.maps.StreetViewStatus.OK && data&&data.location){
+        try{ pano.setPano(data.location.pano); pano.setVisible(true); }catch(e){}
+        target={lat:data.location.latLng.lat(),lng:data.location.latLng.lng()};
+        msg.style.display='none'; panoEl.style.display=''; goBtn.disabled=false;
+      }else{
+        if(pano) pano.setVisible(false); panoEl.style.display='none';
+        msg.textContent='No Street View imagery near that spot — try a road or a built-up area.'; msg.style.display='';
+        goBtn.disabled=true; target=null;
+      }
+    });
+  }
+
+  toggle.addEventListener('click',function(){
+    open=!open; body.style.display=open?'':'none'; toggle.textContent=open?'Hide':'Show';
+    if(open) loadGM();
+  });
+
+  goBtn.addEventListener('click',function(){
+    if(!target) return;
+    var lat=target.lat, lng=target.lng;
+    if(typeof window.setCoordinates==='function'){ try{ window.setCoordinates(lat,lng); }catch(e){} }
+    if(window.map&&window.marker&&window.marker.setLatLng){ try{ window.marker.setLatLng([lat,lng]); }catch(e){} }
+    if(typeof window.wanderFavTeleport==='function'){ window.wanderFavTeleport(lat,lng); }
+    else if(typeof window.setLocation==='function'){ window.setLocation(); }
+    if(window.wanderToast) window.wanderToast('📍 Teleporting to the Street View spot…');
+  });
+
+  // When the panel is open, clicking the map looks around that spot (complements the pin drop).
+  function hookMap(){
+    if(window.map&&window.map.on){ window.map.on('click',function(e){ if(open&&e&&e.latlng) showAt(e.latlng.lat,e.latlng.lng); }); return true; }
+    return false;
+  }
+  if(!hookMap()){ var t=setInterval(function(){ if(hookMap()) clearInterval(t); },400); setTimeout(function(){ clearInterval(t); },15000); }
+})();
+</script>
+{% endif %}
 </body>
 
 </html>
