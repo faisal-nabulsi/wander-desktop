@@ -398,6 +398,46 @@ body.dark-mode .modal-footer button {
     <button type="button" id="waiRun" class="wai-run">&#9654; Replay this day as a route</button>
   </div>
 
+  <!-- ===== Saved loops (Pro) — save the current Multi-Spot route + run it on repeat ===== -->
+  <style>
+    #wtheme-loops .wsl-name{width:100%;padding:6px 8px;border:1px solid #dbe3ec;border-radius:8px;font-size:12.5px;margin-bottom:6px}
+    #wtheme-loops .wsl-btn{width:100%;padding:8px;border:none;border-radius:9px;background:#185FA5;color:#fff;font-weight:600;cursor:pointer}
+    #wtheme-loops .wsl-pro{display:none;font-size:9.5px;font-weight:800;letter-spacing:.4px;vertical-align:middle;padding:1px 6px;border-radius:6px;background:linear-gradient(135deg,#f0a500,#e07b00);color:#fff}
+    body:not(.wander-pro) #wtheme-loops .wsl-pro{display:inline-block}
+    #wtheme-loops .wsl-list{margin:8px 0 0;padding:0;list-style:none;font-size:12.5px}
+    #wtheme-loops .wsl-list li{display:flex;align-items:center;gap:6px;padding:4px 0;border-top:1px solid #eef2f7}
+    #wtheme-loops .wsl-list .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #wtheme-loops .wsl-list button{border:none;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer}
+    #wtheme-loops .wsl-run{background:#185FA5;color:#fff}
+    #wtheme-loops .wsl-del{background:#eef2f7;color:#6b7a8c}
+    #wtheme-loops .wsl-msg{font-size:12px;color:#6b7a8c;margin:6px 0 0;line-height:1.45}
+  </style>
+  <div class="mb-3" id="wtheme-loops">
+    <div class="wtheme-card-title">Saved loops <span class="wsl-pro">PRO</span></div>
+    <input type="text" id="wslName" class="wsl-name" placeholder="Loop name" maxlength="40">
+    <button type="button" id="wslSave" class="wsl-btn">&#128190; Save current route as a loop</button>
+    <div id="wslMsg" class="wsl-msg">Build a Multi-Spot route, then save it here to run on repeat anytime.</div>
+    <ul id="wslList" class="wsl-list"></ul>
+  </div>
+
+  <!-- ===== AI natural-language teleport (Pro, 5/day) — "take me to Times Square" ===== -->
+  <style>
+    #wtheme-nlt .wnlt-row{display:flex;gap:6px}
+    #wtheme-nlt .wnlt-in{flex:1;padding:7px 8px;border:1px solid #dbe3ec;border-radius:8px;font-size:12.5px}
+    #wtheme-nlt .wnlt-go{padding:7px 12px;border:none;border-radius:8px;background:linear-gradient(135deg,#7b5cff,#5a3fe0);color:#fff;font-weight:700;cursor:pointer}
+    #wtheme-nlt .wnlt-pro{display:none;font-size:9.5px;font-weight:800;letter-spacing:.4px;vertical-align:middle;padding:1px 6px;border-radius:6px;background:linear-gradient(135deg,#f0a500,#e07b00);color:#fff}
+    body:not(.wander-pro) #wtheme-nlt .wnlt-pro{display:inline-block}
+    #wtheme-nlt .wnlt-msg{font-size:12px;color:#6b7a8c;margin:6px 0 0}
+  </style>
+  <div class="mb-3" id="wtheme-nlt">
+    <div class="wtheme-card-title">Ask to go somewhere <span class="wnlt-pro">PRO</span></div>
+    <div class="wnlt-row">
+      <input type="text" id="wnltIn" class="wnlt-in" placeholder="e.g. take me to Times Square">
+      <button type="button" id="wnltGo" class="wnlt-go">Go</button>
+    </div>
+    <div id="wnltMsg" class="wnlt-msg"></div>
+  </div>
+
   <!-- ===== Recent teleports history + undo (scoped: wth-) — free, localStorage ===== -->
   <style>
     #wtheme-history .wth-empty{font-size:12.5px;color:#6b7a8c;padding:2px 0 4px}
@@ -3365,6 +3405,8 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   var lastClick=null;            // most recent map click {lat,lng}
   var activeMode=null;           // currently shown pane key
   var jumpPts=[], multiPts=[];   // point lists
+  // Read-only accessor so the "Saved loops" card can capture the current route.
+  window.wanderGetMultiPts = function(){ return (multiPts||[]).slice(); };
   var joyStarted=false;
   var speeds={two:5, multi:1.4, joy:1.4};
 
@@ -4323,6 +4365,8 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   window.wanderTrialStatus = () => trialCall("/trial/status");
   // AI routine generator — calls the SAME Worker (Anthropic key stays server-side).
   window.wanderAiRoutine = (lat, lng, opts) => trialCall("/ai/routine", Object.assign({ lat: lat, lng: lng }, opts || {}));
+  // AI natural-language teleport — "take me to Times Square" -> {place:{label,lat,lng}}.
+  window.wanderAiPlace = (query) => trialCall("/ai/place", { query: query });
   window.wanderTrialConsume = async (mode, seconds) => {
     const body = (mode === "joystick") ? { mode, seconds: seconds || 30 } : { mode };
     const r = await trialCall("/trial/consume", body);
@@ -4850,6 +4894,90 @@ window.WanderOLC=(function(){
       .then(function(){ if(window.wanderToast) window.wanderToast('▶ Replaying your believable day…'); })
       .catch(function(){ if(window.wanderToast) window.wanderToast('Could not start replay.'); });
   });
+})();
+</script>
+
+<!-- ===== AI natural-language teleport logic — Pro-gated, calls window.wanderAiPlace ===== -->
+<script>
+(function(){
+  var inEl=document.getElementById('wnltIn'), go=document.getElementById('wnltGo'), msg=document.getElementById('wnltMsg');
+  if(!go) return;
+  function isPro(){ return window.WANDER_PRO===true || document.body.classList.contains('wander-pro'); }
+  function upsell(){ try{ window.open('https://wanderspoofer.com/pricing/','_blank','noopener'); }catch(e){} }
+  function teleport(lat,lng){
+    if(typeof window.setCoordinates==='function'){ try{ window.setCoordinates(lat,lng); }catch(e){} }
+    if(window.map&&window.marker&&window.marker.setLatLng){ try{ window.marker.setLatLng([lat,lng]); window.map.setView([lat,lng],13); }catch(e){} }
+    if(typeof window.wanderFavTeleport==='function'){ window.wanderFavTeleport(lat,lng); }
+    else if(typeof window.setLocation==='function'){ window.setLocation(); }
+  }
+  function submit(){
+    if(!isPro()){ upsell(); return; }
+    if(typeof window.wanderAiPlace!=='function'){ msg.textContent='Sign in to your Wander account to use AI.'; return; }
+    var q=(inEl.value||'').trim(); if(!q){ inEl.focus(); return; }
+    go.disabled=true; msg.textContent='Finding…';
+    window.wanderAiPlace(q).then(function(r){
+      go.disabled=false;
+      if(r && r.ok && r.place && r.place.found){
+        teleport(r.place.lat, r.place.lng);
+        msg.textContent='📍 '+String(r.place.label||'There').replace(/[<>&]/g,'');
+        if(window.wanderToast) window.wanderToast('📍 '+String(r.place.label||'Teleported').replace(/[<>&]/g,''));
+        return;
+      }
+      if(r && r.place && r.place.found===false){ msg.textContent='Couldn’t place that — try naming a real spot.'; return; }
+      if(r && r.error==='pro_required'){ upsell(); msg.textContent='This is a Pro feature.'; return; }
+      if(r && r.error==='daily_limit'){ msg.textContent='You’ve used today’s 5 AI teleports.'; return; }
+      if(r && r.error==='ai_not_configured'){ msg.textContent='AI isn’t switched on yet.'; return; }
+      if(r && r.unauthorized){ msg.textContent='Please sign in again.'; return; }
+      msg.textContent='Couldn’t reach the AI service.';
+    }).catch(function(){ go.disabled=false; msg.textContent='Couldn’t reach the AI service.'; });
+  }
+  go.addEventListener('click',submit);
+  inEl.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); submit(); } });
+})();
+</script>
+
+<!-- ===== Saved loops card logic — Pro-gated, localStorage; runs via /wander/route ===== -->
+<script>
+(function(){
+  var nameEl=document.getElementById('wslName'), saveBtn=document.getElementById('wslSave'),
+      listEl=document.getElementById('wslList'), msg=document.getElementById('wslMsg');
+  if(!saveBtn) return;
+  var KEY='wanderSavedLoops';
+  function isPro(){ return window.WANDER_PRO===true || document.body.classList.contains('wander-pro'); }
+  function upsell(){ try{ window.open('https://wanderspoofer.com/pricing/','_blank','noopener'); }catch(e){} }
+  function load(){ try{ var a=JSON.parse(localStorage.getItem(KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+  function store(a){ try{ localStorage.setItem(KEY, JSON.stringify(a.slice(0,50))); }catch(e){} }
+  function esc(s){ return String(s==null?'':s).replace(/[<>&]/g,''); }
+  function runLoop(r){
+    if(!isPro()){ upsell(); return; }
+    if(!r.pts || r.pts.length<2){ msg.textContent='That loop has too few points.'; return; }
+    fetch('/wander/route',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({points:r.pts, speed_mps:1.4, loop:'loop', realistic:true})})
+      .then(function(){ if(window.wanderToast) window.wanderToast('▶ Running loop: '+r.name); })
+      .catch(function(){ if(window.wanderToast) window.wanderToast('Could not start the loop.'); });
+  }
+  function render(){
+    var arr=load(); listEl.innerHTML='';
+    arr.forEach(function(r,i){
+      var li=document.createElement('li');
+      var nm=document.createElement('span'); nm.className='nm'; nm.textContent=r.name+' ('+((r.pts&&r.pts.length)||0)+')'; li.appendChild(nm);
+      var run=document.createElement('button'); run.className='wsl-run'; run.textContent='▶ Run';
+      run.addEventListener('click',function(){ runLoop(r); }); li.appendChild(run);
+      var del=document.createElement('button'); del.className='wsl-del'; del.textContent='✕';
+      del.addEventListener('click',function(){ var a=load(); a.splice(i,1); store(a); render(); }); li.appendChild(del);
+      listEl.appendChild(li);
+    });
+  }
+  saveBtn.addEventListener('click',function(){
+    if(!isPro()){ upsell(); return; }
+    var pts = (typeof window.wanderGetMultiPts==='function') ? window.wanderGetMultiPts() : [];
+    if(!pts || pts.length<2){ msg.textContent='Add at least 2 points in Multi-Spot Route first, then save.'; return; }
+    var name = ((nameEl && nameEl.value) || '').trim().slice(0,40);
+    if(!name){ msg.textContent='Give the loop a name first.'; if(nameEl) nameEl.focus(); return; }
+    var arr=load(); arr.unshift({name:esc(name), pts:pts}); store(arr);
+    if(nameEl) nameEl.value=''; msg.textContent='Saved “'+esc(name)+'”.'; render();
+  });
+  render();
 })();
 </script>
 
