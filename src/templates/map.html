@@ -392,8 +392,9 @@ body.dark-mode .modal-footer button {
   </style>
   <div class="mb-3" id="wtheme-ai">
     <div class="wtheme-card-title">Believable day <span class="wai-pro">PRO</span></div>
+    <input type="text" id="waiPrompt" placeholder="Describe the day (optional) — e.g. a nurse's shift" style="width:100%;padding:7px 8px;border:1px solid #dbe3ec;border-radius:8px;font-size:12.5px;margin-bottom:6px">
     <button type="button" id="waiGen" class="wai-btn">&#10024; Generate a believable day</button>
-    <div id="waiMsg" class="wai-msg">A natural home &rarr; work &rarr; gym &rarr; home routine near your spot that you can replay.</div>
+    <div id="waiMsg" class="wai-msg">Describe a day, or leave blank to surprise you. A natural home &rarr; work &rarr; gym routine you can replay.</div>
     <ul id="waiList" class="wai-list"></ul>
     <button type="button" id="waiRun" class="wai-run">&#9654; Replay this day as a route</button>
   </div>
@@ -436,6 +437,28 @@ body.dark-mode .modal-footer button {
       <button type="button" id="wnltGo" class="wnlt-go">Go</button>
     </div>
     <div id="wnltMsg" class="wnlt-msg"></div>
+  </div>
+
+  <!-- ===== PoGo raids / eggs / events (free, read-only LeekDuck community data) ===== -->
+  <style>
+    #wtheme-pogo .wpg-tabs{display:flex;gap:6px;margin-bottom:8px}
+    #wtheme-pogo .wpg-tab{flex:1;padding:6px;border:1px solid #dbe3ec;border-radius:8px;background:#fff;font-size:12px;cursor:pointer;color:#6b7a8c}
+    #wtheme-pogo .wpg-tab.on{background:#185FA5;color:#fff;border-color:#185FA5}
+    #wtheme-pogo .wpg-body{font-size:12.5px;max-height:230px;overflow:auto}
+    #wtheme-pogo .wpg-grp{font-weight:700;color:#0f2438;margin:8px 0 3px;font-size:12px}
+    #wtheme-pogo .wpg-row{padding:3px 0;border-top:1px solid #f0f3f7;display:flex;gap:6px;align-items:center}
+    #wtheme-pogo .wpg-shiny{color:#f0a500}
+    #wtheme-pogo .wpg-src{font-size:10.5px;color:#9db4cc;margin-top:6px;text-align:right}
+  </style>
+  <div class="mb-3" id="wtheme-pogo">
+    <div class="wtheme-card-title">Raids &amp; eggs today</div>
+    <div class="wpg-tabs">
+      <button type="button" class="wpg-tab on" data-t="raids">Raids</button>
+      <button type="button" class="wpg-tab" data-t="eggs">Eggs</button>
+      <button type="button" class="wpg-tab" data-t="events">Events</button>
+    </div>
+    <div id="wpgBody" class="wpg-body">Loading&hellip;</div>
+    <div class="wpg-src">Data: LeekDuck</div>
   </div>
 
   <!-- ===== Recent teleports history + undo (scoped: wth-) — free, localStorage ===== -->
@@ -4865,8 +4888,10 @@ window.WanderOLC=(function(){
     if(typeof window.wanderAiRoutine!=='function'){ msg.textContent='Sign in to your Wander account to use AI.'; return; }
     var ll=curLatLng();
     if(!ll){ msg.textContent='Set a location on the map first.'; return; }
-    gen.disabled=true; msg.textContent='Generating…'; list.innerHTML=''; run.style.display='none'; lastPlaces=null;
-    window.wanderAiRoutine(ll[0], ll[1]).then(function(r){
+    var promptEl=document.getElementById('waiPrompt');
+    var style=((promptEl && promptEl.value) || '').trim().slice(0,80);
+    gen.disabled=true; msg.textContent=style?'Generating your day…':'Surprising you…'; list.innerHTML=''; run.style.display='none'; lastPlaces=null;
+    window.wanderAiRoutine(ll[0], ll[1], style?{style:style}:undefined).then(function(r){
       gen.disabled=false;
       if(!r){ msg.textContent='Something went wrong — try again.'; return; }
       if(r.ok && r.routine && r.routine.places && r.routine.places.length){
@@ -4894,6 +4919,52 @@ window.WanderOLC=(function(){
       .then(function(){ if(window.wanderToast) window.wanderToast('▶ Replaying your believable day…'); })
       .catch(function(){ if(window.wanderToast) window.wanderToast('Could not start replay.'); });
   });
+})();
+</script>
+
+<!-- ===== PoGo raids/eggs/events card — free, fetches the Worker /pogo/events (LeekDuck) ===== -->
+<script>
+(function(){
+  var card=document.getElementById('wtheme-pogo'); if(!card) return;
+  var body=document.getElementById('wpgBody'), tabs=card.querySelectorAll('.wpg-tab');
+  var API="https://wander-payments.wanderlocation.workers.dev/pogo/events?type=";
+  var cache={};
+  function esc(s){ return String(s==null?'':s).replace(/[<>&]/g,''); }
+  function shiny(c){ return c?' <span class="wpg-shiny" title="Can be shiny">&#10022;</span>':''; }
+  function groupBy(arr,key){ var m={},order=[]; arr.forEach(function(x){ var k=x[key]||'Other'; if(!m[k]){m[k]=[];order.push(k);} m[k].push(x); }); return order.map(function(k){ return {k:k,items:m[k]}; }); }
+  function renderRaids(d){
+    return groupBy(d,'tier').map(function(g){
+      return '<div class="wpg-grp">'+esc(g.k)+'</div>'+g.items.map(function(r){
+        var types=(r.types||[]).map(function(t){return esc(t.name);}).join(', ');
+        return '<div class="wpg-row">'+esc(r.name)+shiny(r.canBeShiny)+(types?' <span style="color:#9aa7b4">'+types+'</span>':'')+'</div>';
+      }).join('');
+    }).join('') || 'No raids listed right now.';
+  }
+  function renderEggs(d){
+    return groupBy(d,'eggType').map(function(g){
+      return '<div class="wpg-grp">'+esc(g.k)+'</div>'+g.items.map(function(e){
+        return '<div class="wpg-row">'+esc(e.name)+shiny(e.canBeShiny)+(e.isAdventureSync?' <span style="color:#9aa7b4">(Adventure Sync)</span>':'')+'</div>';
+      }).join('');
+    }).join('') || 'No eggs listed right now.';
+  }
+  function renderEvents(d){
+    return (d||[]).slice(0,30).map(function(e){
+      return '<div class="wpg-row">'+esc(e.name||e.heading)+(e.eventType?' <span style="color:#9aa7b4">'+esc(e.eventType)+'</span>':'')+'</div>';
+    }).join('') || 'No events listed right now.';
+  }
+  function paint(type,d){ body.innerHTML = type==='raids'?renderRaids(d):(type==='eggs'?renderEggs(d):renderEvents(d)); }
+  function show(type){
+    if(cache[type]){ paint(type,cache[type]); return; }
+    body.textContent='Loading…';
+    fetch(API+type).then(function(r){return r.json();}).then(function(d){
+      if(!Array.isArray(d)){ body.textContent='Couldn’t load right now.'; return; }
+      cache[type]=d; paint(type,d);
+    }).catch(function(){ body.textContent='Offline — try again later.'; });
+  }
+  tabs.forEach(function(t){ t.addEventListener('click',function(){
+    tabs.forEach(function(x){x.classList.remove('on');}); t.classList.add('on'); show(t.getAttribute('data-t'));
+  }); });
+  show('raids');
 })();
 </script>
 
