@@ -38,6 +38,8 @@
 
     // Deliver the chosen coordinate to whatever host is embedding this page.
     function deliver(lat,lng){
+      // Desktop: embedded in a same-origin iframe → call the parent's handler.
+      try{ if(window.parent && window.parent!==window && window.parent.wanderGlobePick){ window.parent.wanderGlobePick(lat,lng); return; } }catch(e){}
       try{ if(window.wanderGlobePick){ window.wanderGlobePick(lat,lng); return; } }catch(e){}
       // iOS WKWebView message handler
       try{ if(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.wanderGlobe){

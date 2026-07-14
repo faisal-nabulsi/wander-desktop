@@ -461,6 +461,43 @@ body.dark-mode .modal-footer button {
     <div class="wpg-src">Data: LeekDuck</div>
   </div>
 
+  <!-- ===== 3D globe (free) — spin + tap to teleport ===== -->
+  <div class="mb-3" id="wtheme-globe">
+    <div class="wtheme-card-title">3D globe</div>
+    <button type="button" id="wglobeOpen" style="width:100%;padding:9px;border:none;border-radius:9px;background:linear-gradient(135deg,#2b6fb5,#12325a);color:#fff;font-weight:700;cursor:pointer">&#127760; Spin the globe &amp; tap to teleport</button>
+  </div>
+
+  <!-- ===== Itinerary queue (Pro) — timed steps run in order while the app is open ===== -->
+  <style>
+    #wtheme-itin .wit-row{display:flex;gap:6px;margin-bottom:6px}
+    #wtheme-itin select,#wtheme-itin input{padding:6px 8px;border:1px solid #dbe3ec;border-radius:8px;font-size:12.5px}
+    #wtheme-itin select{flex:1}
+    #wtheme-itin .wit-min{width:60px}
+    #wtheme-itin .wit-add{padding:6px 10px;border:none;border-radius:8px;background:#185FA5;color:#fff;font-weight:600;cursor:pointer}
+    #wtheme-itin .wit-pro{display:none;font-size:9.5px;font-weight:800;letter-spacing:.4px;vertical-align:middle;padding:1px 6px;border-radius:6px;background:linear-gradient(135deg,#f0a500,#e07b00);color:#fff}
+    body:not(.wander-pro) #wtheme-itin .wit-pro{display:inline-block}
+    #wtheme-itin .wit-list{margin:6px 0;padding:0;list-style:none;font-size:12px}
+    #wtheme-itin .wit-list li{display:flex;align-items:center;gap:6px;padding:4px 0;border-top:1px solid #eef2f7}
+    #wtheme-itin .wit-list li.on{font-weight:700;color:#185FA5}
+    #wtheme-itin .wit-list .g{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #wtheme-itin .wit-del{border:none;background:#eef2f7;color:#6b7a8c;border-radius:6px;padding:2px 7px;cursor:pointer}
+    #wtheme-itin .wit-start{width:100%;padding:8px;border:none;border-radius:9px;background:#1a9c54;color:#fff;font-weight:700;cursor:pointer}
+    #wtheme-itin .wit-stop{width:100%;padding:8px;border:none;border-radius:9px;background:#d33a2c;color:#fff;font-weight:700;cursor:pointer;display:none}
+    #wtheme-itin .wit-msg{font-size:11.5px;color:#6b7a8c;margin-top:6px;line-height:1.4}
+  </style>
+  <div class="mb-3" id="wtheme-itin">
+    <div class="wtheme-card-title">Itinerary <span class="wit-pro">PRO</span></div>
+    <div class="wit-row">
+      <select id="witMode"><option value="teleport">Teleport to pin</option><option value="route">Route to pin</option></select>
+      <input class="wit-min" id="witMin" type="number" min="1" value="60" title="Stay minutes">
+      <button type="button" class="wit-add" id="witAdd">+ Add</button>
+    </div>
+    <ul id="witList" class="wit-list"></ul>
+    <button type="button" id="witStart" class="wit-start">&#9654; Start itinerary</button>
+    <button type="button" id="witStop" class="wit-stop">&#9632; Stop</button>
+    <div class="wit-msg" id="witMsg">Set a pin, pick teleport/route + minutes, Add. Runs in order while Wander stays open.</div>
+  </div>
+
   <!-- ===== Recent teleports history + undo (scoped: wth-) — free, localStorage ===== -->
   <style>
     #wtheme-history .wth-empty{font-size:12.5px;color:#6b7a8c;padding:2px 0 4px}
@@ -4919,6 +4956,97 @@ window.WanderOLC=(function(){
       .then(function(){ if(window.wanderToast) window.wanderToast('▶ Replaying your believable day…'); })
       .catch(function(){ if(window.wanderToast) window.wanderToast('Could not start replay.'); });
   });
+})();
+</script>
+
+<!-- ===== Itinerary queue logic — Pro, timed steps via /wander/teleport + /wander/route ===== -->
+<script>
+(function(){
+  var addBtn=document.getElementById('witAdd'), listEl=document.getElementById('witList'),
+      startBtn=document.getElementById('witStart'), stopBtn=document.getElementById('witStop'),
+      modeEl=document.getElementById('witMode'), minEl=document.getElementById('witMin'), msg=document.getElementById('witMsg');
+  if(!addBtn) return;
+  var KEY='wanderItinerary', steps=[], running=false, activeIdx=-1, stayTimer=null, cdTimer=null;
+  function isPro(){ return window.WANDER_PRO===true || document.body.classList.contains('wander-pro'); }
+  function upsell(){ try{ window.open('https://wanderspoofer.com/pricing/','_blank','noopener'); }catch(e){} }
+  function curLatLng(){ if(window.marker&&window.marker.getLatLng){ var p=window.marker.getLatLng(); return [p.lat,p.lng]; } if(window.map&&window.map.getCenter){ var c=window.map.getCenter(); return [c.lat,c.lng]; } return null; }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(steps)); }catch(e){} }
+  function load(){ try{ var a=JSON.parse(localStorage.getItem(KEY)||'[]'); steps=Array.isArray(a)?a:[]; }catch(e){ steps=[]; } }
+  function render(){
+    listEl.innerHTML='';
+    steps.forEach(function(s,i){
+      var li=document.createElement('li'); if(i===activeIdx) li.className='on';
+      var g=document.createElement('span'); g.className='g';
+      g.textContent=(i+1)+'. '+(s.mode==='route'?'Route':'Teleport')+' → '+Number(s.lat).toFixed(3)+','+Number(s.lng).toFixed(3)+' · stay '+s.min+'m';
+      li.appendChild(g);
+      if(!running){ var d=document.createElement('button'); d.className='wit-del'; d.textContent='✕'; d.addEventListener('click',function(){ steps.splice(i,1); save(); render(); }); li.appendChild(d); }
+      listEl.appendChild(li);
+    });
+  }
+  addBtn.addEventListener('click',function(){
+    var ll=curLatLng(); if(!ll){ msg.textContent='Set a pin on the map first.'; return; }
+    var m=Math.max(1, parseInt(minEl.value,10)||60);
+    steps.push({mode:modeEl.value, lat:ll[0], lng:ll[1], min:m}); save(); render();
+    msg.textContent='Added step '+steps.length+'.';
+  });
+  function stopRun(revert){
+    running=false; activeIdx=-1;
+    if(stayTimer){ clearTimeout(stayTimer); stayTimer=null; }
+    if(cdTimer){ clearInterval(cdTimer); cdTimer=null; }
+    startBtn.style.display=''; stopBtn.style.display='none'; render();
+    if(revert){ fetch('/stop_location',{method:'POST'}).catch(function(){}); }
+  }
+  function runStep(i){
+    if(!running) return;
+    if(i>=steps.length){ msg.textContent='Itinerary finished.'; stopRun(true); return; }
+    activeIdx=i; render();
+    var s=steps[i], go;
+    if(s.mode==='route' && i>0){
+      go=fetch('/wander/route',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({points:[[steps[i-1].lat,steps[i-1].lng],[s.lat,s.lng]], speed_mps:1.4, loop:'once', realistic:true})});
+    } else {
+      go=fetch('/wander/teleport',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat:s.lat,lng:s.lng,fluctuate:true})});
+    }
+    go.catch(function(){}).then(function(){
+      if(!running) return;
+      var left=s.min*60;
+      if(cdTimer) clearInterval(cdTimer);
+      cdTimer=setInterval(function(){ left--; var mm=Math.floor(left/60), ss=((left%60)+60)%60; msg.textContent='Step '+(i+1)+' — '+mm+':'+(ss<10?'0':'')+ss+' left'; if(left<=0) clearInterval(cdTimer); }, 1000);
+      stayTimer=setTimeout(function(){ runStep(i+1); }, s.min*60*1000);
+    });
+  }
+  startBtn.addEventListener('click',function(){
+    if(!isPro()){ upsell(); return; }
+    if(steps.length<1){ msg.textContent='Add at least one step first.'; return; }
+    running=true; startBtn.style.display='none'; stopBtn.style.display=''; runStep(0);
+  });
+  stopBtn.addEventListener('click',function(){ stopRun(true); msg.textContent='Stopped — real GPS restored.'; });
+  load(); render();
+})();
+</script>
+
+<!-- ===== 3D globe modal — iframe to same-origin /globe; teleport on pick ===== -->
+<div id="wglobeModal" style="display:none;position:fixed;inset:0;z-index:100000;background:#0b1220">
+  <iframe id="wglobeFrame" src="" style="width:100%;height:100%;border:none" title="3D globe"></iframe>
+  <button id="wglobeClose" type="button" title="Close" style="position:fixed;top:14px;right:14px;z-index:100001;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:38px;height:38px;font-size:18px;cursor:pointer">&times;</button>
+</div>
+<script>
+(function(){
+  var openBtn=document.getElementById('wglobeOpen'), modal=document.getElementById('wglobeModal'),
+      frame=document.getElementById('wglobeFrame'), closeBtn=document.getElementById('wglobeClose');
+  if(!openBtn) return;
+  function openGlobe(){ frame.src='/globe'; modal.style.display='block'; }
+  function closeGlobe(){ modal.style.display='none'; frame.src=''; }
+  openBtn.addEventListener('click',openGlobe);
+  closeBtn.addEventListener('click',closeGlobe);
+  // The globe iframe (same origin) calls window.parent.wanderGlobePick on tap.
+  window.wanderGlobePick=function(lat,lng){
+    if(typeof window.setCoordinates==='function'){ try{ window.setCoordinates(lat,lng); }catch(e){} }
+    if(window.map&&window.marker&&window.marker.setLatLng){ try{ window.marker.setLatLng([lat,lng]); window.map.setView([lat,lng],10); }catch(e){} }
+    if(typeof window.wanderFavTeleport==='function'){ window.wanderFavTeleport(lat,lng); }
+    else if(typeof window.setLocation==='function'){ window.setLocation(); }
+    if(window.wanderToast) window.wanderToast('🌐 Teleported from the globe');
+    closeGlobe();
+  };
 })();
 </script>
 

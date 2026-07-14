@@ -135,7 +135,7 @@ APP_VERSION_NUMBER = "1.0.0"
 APP_VERSION_TYPE = "standard"
 # Single source of truth for the desktop app version used by the /update-check
 # route. Bump WANDER_VERSION here AND version in wander-site desktop.json each release.
-WANDER_VERSION = "1.5.0"
+WANDER_VERSION = "1.6.0"
 terminate_tunnel_thread = False
 terminate_location_thread = False
 location_threads = []
@@ -1528,6 +1528,12 @@ def wander_pogo():
     except Exception as e:
         logger.error(f"pogo data error: {e}")
         return jsonify({"hotspots": [], "routes": [], "error": str(e)}), 500
+
+
+# Interactive 3D globe (same-origin so the iframe can call window.parent.wanderGlobePick).
+@app.route('/globe')
+def globe():
+    return render_template('globe.html')
 
 
 # Server-side geocode proxy. Nominatim rejects browser/no-User-Agent/datacenter
