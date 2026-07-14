@@ -338,13 +338,17 @@ body.dark-mode .modal-footer button {
     #wsvMsg{font-size:12px;color:#6b7a8c;margin:4px 0 6px}
     #wsvGo{width:100%;padding:8px;border:none;border-radius:9px;background:#185FA5;color:#fff;font-weight:600;cursor:pointer}
     #wsvGo:disabled{background:#9db4cc;cursor:not-allowed}
+    #wtheme-streetview .wsv-pro{display:none;font-size:9.5px;font-weight:800;letter-spacing:.4px;vertical-align:middle;padding:1px 6px;border-radius:6px;background:linear-gradient(135deg,#f0a500,#e07b00);color:#fff}
+    body:not(.wander-pro) #wtheme-streetview .wsv-pro{display:inline-block}
+    #wsvGetPro{width:100%;padding:9px;border:none;border-radius:9px;background:linear-gradient(135deg,#f0a500,#e07b00);color:#fff;font-weight:700;cursor:pointer}
   </style>
   <div class="mb-3" id="wtheme-streetview">
-    <div class="wtheme-card-title">Street View <button type="button" id="wsvToggle" class="wsv-toggle">Show</button></div>
+    <div class="wtheme-card-title">Street View <span id="wsvPro" class="wsv-pro">PRO</span> <button type="button" id="wsvToggle" class="wsv-toggle">Show</button></div>
     <div id="wsvBody" style="display:none">
       <div id="wsvPano"></div>
       <div id="wsvMsg">Click a spot on the map to look around it in Street View.</div>
       <button type="button" id="wsvGo" disabled>📍 Teleport to this view</button>
+      <button type="button" id="wsvGetPro" style="display:none">✨ Unlock Street View with Wander Pro</button>
     </div>
   </div>
   {% endif %}
@@ -4339,9 +4343,20 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   var KEY = "{{ google_maps_key }}";
   if(!KEY) return;
   var body=document.getElementById('wsvBody'), toggle=document.getElementById('wsvToggle'),
-      panoEl=document.getElementById('wsvPano'), msg=document.getElementById('wsvMsg'), goBtn=document.getElementById('wsvGo');
+      panoEl=document.getElementById('wsvPano'), msg=document.getElementById('wsvMsg'), goBtn=document.getElementById('wsvGo'),
+      getProBtn=document.getElementById('wsvGetPro');
   if(!toggle||!panoEl) return;
   var pano=null, svc=null, target=null, open=false, gmReady=false;
+  // Street View is a Pro feature: every panorama load bills the shared Google Maps key,
+  // so free users must never reach the API. Gate mirrors the app's global Pro flag.
+  function isPro(){ return window.WANDER_PRO===true || document.body.classList.contains('wander-pro'); }
+  function showUpsell(){
+    panoEl.style.display='none'; goBtn.style.display='none'; goBtn.disabled=true;
+    if(getProBtn) getProBtn.style.display='';
+    msg.textContent='Street View is a Wander Pro feature — see any street before you teleport there.';
+    msg.style.display='';
+  }
+  if(getProBtn) getProBtn.addEventListener('click',function(){ window.open('https://wanderspoofer.com/pricing/','_blank','noopener'); });
 
   // Called by the Google Maps script tag once the API has loaded.
   window.wanderInitStreetView=function(){
@@ -4365,6 +4380,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
 
   function showAt(lat,lng){
     if(!open) return;
+    if(!isPro()){ showUpsell(); return; }
     if(!gmReady){ msg.textContent='Loading Street View…'; msg.style.display=''; return; }
     svc.getPanorama({location:{lat:lat,lng:lng},radius:120},function(data,status){
       if(status===google.maps.StreetViewStatus.OK && data&&data.location){
@@ -4381,7 +4397,11 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
 
   toggle.addEventListener('click',function(){
     open=!open; body.style.display=open?'':'none'; toggle.textContent=open?'Hide':'Show';
-    if(open) loadGM();
+    if(!open) return;
+    if(!isPro()){ showUpsell(); return; }   // free user: never load the billable Maps API
+    if(getProBtn) getProBtn.style.display='none';
+    goBtn.style.display='';
+    loadGM();
   });
 
   goBtn.addEventListener('click',function(){
