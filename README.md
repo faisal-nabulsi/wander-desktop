@@ -27,6 +27,18 @@ Teleport with a click, walk with a live joystick, or drive a full multi-stop rou
 
 **The app, all downloads, and the full setup guide live at [wanderspoofer.com](https://wanderspoofer.com).**
 
+<br/>
+
+<a href="https://github.com/faisal-nabulsi/Wander"><img src="https://img.shields.io/badge/⭐_Star_Wander_on_GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="Star Wander on GitHub"/></a>
+
+**⭐ [Star Wander on GitHub](https://github.com/faisal-nabulsi/Wander) — it's free, takes one click, and helps more people find a free alternative to the paid spoofers.**
+
+<br/>
+
+[![Join our Discord](https://img.shields.io/badge/💬_Join_the_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/gfHdsRXUVA)
+
+**💬 [Join the Wander Discord](https://discord.gg/gfHdsRXUVA) — setup help, release updates, and feature requests. Stuck connecting your iPhone? Ask here and get unstuck fast.**
+
 </div>
 
 ---
@@ -107,8 +119,13 @@ A local **Flask** server hosts a **Leaflet** map (`src/templates/map.html`) and 
 
 ## 💬 Community & support
 
+[![Join our Discord](https://img.shields.io/badge/💬_Join_the_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/gfHdsRXUVA)
+
+**[Join the Wander Discord →](https://discord.gg/gfHdsRXUVA)** for setup help, release updates, and feature requests. It's the fastest way to sort out a device-connection hiccup and to hear about new builds first.
+
 - 🌐 **Website & downloads:** [wanderspoofer.com](https://wanderspoofer.com)
 - 💬 **Discord:** [join the server](https://discord.gg/gfHdsRXUVA)
+- ⭐ **Star the repo:** [give Wander a star](https://github.com/faisal-nabulsi/Wander) — it's the easiest way to support the project.
 - 🐛 **Bugs / feature requests:** open an [issue](https://github.com/faisal-nabulsi/wander-desktop/issues).
 
 ---
