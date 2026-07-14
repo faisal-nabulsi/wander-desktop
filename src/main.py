@@ -135,7 +135,7 @@ APP_VERSION_NUMBER = "1.0.0"
 APP_VERSION_TYPE = "standard"
 # Single source of truth for the desktop app version used by the /update-check
 # route. Bump WANDER_VERSION here AND version in wander-site desktop.json each release.
-WANDER_VERSION = "1.7.0"
+WANDER_VERSION = "1.8.0"
 terminate_tunnel_thread = False
 terminate_location_thread = False
 location_threads = []
@@ -1318,6 +1318,145 @@ def stop_all_movement():
     _move_stop.set()
     terminate_location_thread = True
     _move_state["mode"] = None
+
+
+# ============================================================================
+# MULTI-DEVICE (beta) — hold an INDEPENDENT location on several connected iOS
+# devices at once, each in its own thread + DVT tunnel. Additive and fully
+# isolated from the single-device path above, so it can never break normal use.
+# Requires each device to have been connected (so rsd_data_map[udid] is set).
+# Needs validation with real multiple devices (concurrent iOS-17 tunnels).
+# ============================================================================
+_multi = {}            # udid -> {"thread","stop","lat","lng","name","conn"}
+_multi_lock = threading.Lock()
+
+
+def _multi_pump(udid, connection_type, target):
+    """Hold one device's DVT LocationSimulation, re-setting target['lat'/'lng']
+    every ~1s until target['stop'] is set. target is mutable so a new teleport
+    updates the held location live without reopening the tunnel."""
+    stop = target["stop"]
+
+    def drive(sim):
+        while not stop.is_set():
+            try:
+                sim.set(float(target["lat"]), float(target["lng"]))
+            except Exception as e:
+                logger.error(f"multi[{udid}] set error: {e}")
+                break
+            waited = 0.0
+            while waited < 1.0 and not stop.is_set():
+                time.sleep(0.25); waited += 0.25
+
+    try:
+        use_rsd = udid in rsd_data_map and connection_type in rsd_data_map[udid]
+        if use_rsd:
+            rsd = rsd_data_map[udid][connection_type]
+            async def run():
+                async with RemoteServiceDiscoveryService((rsd["host"], rsd["port"])) as sp_rsd:
+                    with DvtSecureSocketProxyService(sp_rsd) as dvt:
+                        drive(LocationSimulation(dvt))
+            asyncio.run(run())
+        else:
+            ld = create_using_usbmux(udid, connection_type=connection_type, autopair=True)
+            with DvtSecureSocketProxyService(lockdown=ld) as dvt:
+                drive(LocationSimulation(dvt))
+    except Exception as e:
+        logger.error(f"multi[{udid}] pump error: {e}")
+
+
+def _multi_set(udid, connection_type, lat, lng, name=None):
+    """Start (or live-update) a per-device hold at (lat,lng)."""
+    with _multi_lock:
+        entry = _multi.get(udid)
+        if entry and entry["thread"].is_alive():
+            entry["lat"], entry["lng"] = lat, lng   # live update, tunnel stays open
+            return
+        stop = threading.Event()
+        target = {"lat": lat, "lng": lng, "stop": stop}
+        th = threading.Thread(target=lambda: _multi_pump(udid, connection_type, target), daemon=True)
+        _multi[udid] = {"thread": th, "stop": stop, "lat": lat, "lng": lng,
+                        "name": name or udid, "conn": connection_type, "target": target}
+        th.start()
+
+
+def _multi_update(udid, lat, lng):
+    with _multi_lock:
+        entry = _multi.get(udid)
+        if entry:
+            entry["lat"], entry["lng"] = lat, lng
+            entry["target"]["lat"], entry["target"]["lng"] = lat, lng
+
+
+def _multi_stop(udid):
+    with _multi_lock:
+        entry = _multi.pop(udid, None)
+    if entry:
+        entry["stop"].set()
+
+
+def _multi_stop_all():
+    with _multi_lock:
+        entries = list(_multi.values()); _multi.clear()
+    for e in entries:
+        e["stop"].set()
+
+
+@app.route('/multi/teleport', methods=['POST'])
+def multi_teleport():
+    d = request.get_json(force=True) or {}
+    udid = str(d.get('udid') or '').strip()
+    conn = str(d.get('connection_type') or 'USB')
+    try:
+        lat, lng = float(d['lat']), float(d['lng'])
+    except Exception:
+        return jsonify({"ok": False, "error": "bad coordinates"}), 400
+    if not udid:
+        return jsonify({"ok": False, "error": "udid required"}), 400
+    _multi_set(udid, conn, lat, lng, name=d.get('name'))
+    return jsonify({"ok": True})
+
+
+@app.route('/multi/broadcast', methods=['POST'])
+def multi_broadcast():
+    """Set the SAME location on every device passed in `devices` (or every
+    currently-active multi device)."""
+    d = request.get_json(force=True) or {}
+    try:
+        lat, lng = float(d['lat']), float(d['lng'])
+    except Exception:
+        return jsonify({"ok": False, "error": "bad coordinates"}), 400
+    devices = d.get('devices')  # optional [{udid, connection_type, name}]
+    if devices:
+        for dev in devices:
+            u = str(dev.get('udid') or '').strip()
+            if u:
+                _multi_set(u, str(dev.get('connection_type') or 'USB'), lat, lng, name=dev.get('name'))
+    else:
+        with _multi_lock:
+            active = [(u, e["conn"]) for u, e in _multi.items()]
+        for u, c in active:
+            _multi_update(u, lat, lng)
+    return jsonify({"ok": True, "count": len(devices) if devices else len(_multi)})
+
+
+@app.route('/multi/stop', methods=['POST'])
+def multi_stop_route():
+    d = request.get_json(force=True) or {}
+    u = str(d.get('udid') or '').strip()
+    if u:
+        _multi_stop(u)
+    else:
+        _multi_stop_all()
+    return jsonify({"ok": True})
+
+
+@app.route('/multi/status', methods=['GET'])
+def multi_status():
+    with _multi_lock:
+        out = [{"udid": u, "name": e["name"], "lat": e["lat"], "lng": e["lng"],
+                "alive": e["thread"].is_alive()} for u, e in _multi.items()]
+    return jsonify({"devices": out})
 
 
 @app.route('/wander/teleport', methods=['POST'])

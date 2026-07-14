@@ -499,6 +499,20 @@ body.dark-mode .modal-footer button {
     <div class="wit-msg" id="witMsg">Set a pin, pick teleport/route + minutes, Add. Runs in order while Wander stays open.</div>
   </div>
 
+  <!-- ===== Multi-device (beta) — hold a different location on several phones at once ===== -->
+  <div class="mb-3" id="wtheme-multi">
+    <div class="wtheme-card-title">Multi-device <span style="font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:6px;background:#eef2f7;color:#6b7a8c;vertical-align:middle">BETA</span></div>
+    <div style="font-size:12px;color:#6b7a8c;margin-bottom:6px;line-height:1.4">Hold a location on several connected iPhones at once. Connect each device first, then Refresh.</div>
+    <button type="button" id="wmdRefresh" style="width:100%;margin-bottom:6px;padding:7px;border:none;border-radius:8px;background:#185FA5;color:#fff;font-weight:600;cursor:pointer">&#8635; Refresh devices</button>
+    <div id="wmdList" style="font-size:12.5px"></div>
+    <div style="display:flex;gap:6px;margin-top:6px">
+      <button type="button" id="wmdTeleport" style="flex:1;padding:8px;border:none;border-radius:9px;background:#1a9c54;color:#fff;font-weight:700;cursor:pointer">Set selected to pin</button>
+      <button type="button" id="wmdBroadcast" style="padding:8px 10px;border:none;border-radius:9px;background:#185FA5;color:#fff;font-weight:600;cursor:pointer">All to pin</button>
+    </div>
+    <button type="button" id="wmdStopAll" style="width:100%;margin-top:6px;padding:8px;border:none;border-radius:9px;background:#d33a2c;color:#fff;font-weight:700;cursor:pointer">&#9632; Stop all devices</button>
+    <div id="wmdMsg" style="font-size:11.5px;color:#6b7a8c;margin-top:6px"></div>
+  </div>
+
   <!-- ===== Recent teleports history + undo (scoped: wth-) — free, localStorage ===== -->
   <style>
     #wtheme-history .wth-empty{font-size:12.5px;color:#6b7a8c;padding:2px 0 4px}
@@ -4966,6 +4980,58 @@ window.WanderOLC=(function(){
       body:JSON.stringify({points:pts, speed_mps:1.4, loop:'once', realistic:true})})
       .then(function(){ if(window.wanderToast) window.wanderToast('▶ Replaying your believable day…'); })
       .catch(function(){ if(window.wanderToast) window.wanderToast('Could not start replay.'); });
+  });
+})();
+</script>
+
+<!-- ===== Multi-device (beta) panel logic — /list_devices + /multi/* ===== -->
+<script>
+(function(){
+  var refresh=document.getElementById('wmdRefresh'), listEl=document.getElementById('wmdList'),
+      telBtn=document.getElementById('wmdTeleport'), bcBtn=document.getElementById('wmdBroadcast'),
+      stopBtn=document.getElementById('wmdStopAll'), msg=document.getElementById('wmdMsg');
+  if(!refresh) return;
+  var devices=[]; // {udid, conn, name}
+  function curLatLng(){ if(window.marker&&window.marker.getLatLng){ var p=window.marker.getLatLng(); return [p.lat,p.lng]; } if(window.map&&window.map.getCenter){ var c=window.map.getCenter(); return [c.lat,c.lng]; } return null; }
+  function esc(s){ return String(s==null?'':s).replace(/[<>&]/g,''); }
+  function renderList(){
+    if(!devices.length){ listEl.innerHTML='<div style="color:#9db4cc">No devices — connect a phone, then Refresh.</div>'; return; }
+    listEl.innerHTML=devices.map(function(d,i){
+      return '<label style="display:flex;gap:6px;align-items:center;padding:3px 0"><input type="checkbox" class="wmd-cb" data-i="'+i+'" checked> '+esc(d.name)+' <span style="color:#9db4cc;font-size:11px">'+esc(d.conn)+'</span></label>';
+    }).join('');
+  }
+  function selected(){ var out=[]; listEl.querySelectorAll('.wmd-cb').forEach(function(cb){ if(cb.checked) out.push(devices[+cb.getAttribute('data-i')]); }); return out; }
+  refresh.addEventListener('click',function(){
+    msg.textContent='Loading devices…';
+    fetch('/list_devices').then(function(r){return r.json();}).then(function(j){
+      devices=[];
+      Object.keys(j||{}).forEach(function(udid){
+        var conns=j[udid]||{};
+        Object.keys(conns).forEach(function(conn){
+          var info=(conns[conn]||[])[0]||{};
+          devices.push({udid:udid, conn:conn, name:info.DeviceName||info.ProductType||udid.slice(0,8)});
+        });
+      });
+      renderList(); msg.textContent=devices.length+' device(s) found.';
+    }).catch(function(){ msg.textContent='Could not list devices.'; });
+  });
+  telBtn.addEventListener('click',function(){
+    var ll=curLatLng(); if(!ll){ msg.textContent='Set a pin first.'; return; }
+    var sel=selected(); if(!sel.length){ msg.textContent='Select at least one device.'; return; }
+    sel.forEach(function(d){
+      fetch('/multi/teleport',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({udid:d.udid,connection_type:d.conn,lat:ll[0],lng:ll[1],name:d.name})}).catch(function(){});
+    });
+    msg.textContent='Set '+sel.length+' device(s) to the pin.';
+  });
+  bcBtn.addEventListener('click',function(){
+    var ll=curLatLng(); if(!ll){ msg.textContent='Set a pin first.'; return; }
+    var sel=selected();
+    fetch('/multi/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat:ll[0],lng:ll[1],devices:sel.map(function(d){return {udid:d.udid,connection_type:d.conn,name:d.name};})})}).catch(function(){});
+    msg.textContent='Broadcast to '+(sel.length||'all active')+' device(s).';
+  });
+  stopBtn.addEventListener('click',function(){
+    fetch('/multi/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}).catch(function(){});
+    msg.textContent='Stopped all multi-device holds.';
   });
 })();
 </script>
