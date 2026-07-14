@@ -1350,6 +1350,45 @@ def wander_pogo():
         return jsonify({"hotspots": [], "routes": [], "error": str(e)}), 500
 
 
+# Server-side geocode proxy. Nominatim rejects browser/no-User-Agent/datacenter
+# requests, so the in-app GeoSearch provider frequently returned "No results found".
+# We proxy the query through the desktop process with a proper User-Agent and cache
+# results in-memory so repeated searches don't hammer the public endpoint.
+_geocode_cache = {}
+
+
+@app.route('/geocode', methods=['GET'])
+def geocode():
+    q = (request.args.get('q') or '').strip()
+    if not q:
+        return app.response_class('[]', mimetype='application/json')
+
+    key = q.lower()
+    if key in _geocode_cache:
+        return app.response_class(_geocode_cache[key], mimetype='application/json')
+
+    import json as _json
+    try:
+        resp = requests.get(
+            'https://nominatim.openstreetmap.org/search',
+            params={'format': 'json', 'limit': 5, 'q': q},
+            headers={'User-Agent': 'Wander/1.0 (https://wanderspoofer.com; support@wanderspoofer.com)'},
+            timeout=6,
+        )
+        if resp.status_code != 200:
+            logger.error(f"geocode error: status {resp.status_code} for {q!r}")
+            return app.response_class('[]', mimetype='application/json')
+        data = resp.json()
+        if not isinstance(data, list):
+            data = []
+        payload = _json.dumps(data)
+        _geocode_cache[key] = payload
+        return app.response_class(payload, mimetype='application/json')
+    except Exception as e:
+        logger.error(f"geocode error for {q!r}: {e}")
+        return app.response_class('[]', mimetype='application/json')
+
+
 def get_github_version():
     try:
         # Make a request to the GitHub API to get the content of CURRENT_VERSION file

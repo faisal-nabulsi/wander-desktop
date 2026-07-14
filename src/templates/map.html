@@ -299,6 +299,7 @@ body.dark-mode .modal-footer button {
         <button type="button" class="btn btn-outline-primary" id="wacctSignout">Sign out</button>
       </div>
       <div class="wacct-plan" id="wacctPlan"></div>
+      <div class="wacct-trial" id="wacctTrial" style="display:none"></div>
     </div>
   </div>
 
@@ -1400,12 +1401,15 @@ function handleSearch() {
 
 // Function to search location
 async function searchLocation(input, userLocale) {
-    // Initialize the OSM provider for searching
-    var provider = new GeoSearch.OpenStreetMapProvider();
+    // Geocode via the app's server-side /geocode proxy. Nominatim blocks direct
+    // browser/no-User-Agent requests, so the in-page GeoSearch provider often
+    // returned "No results found"; the proxy adds a proper User-Agent + cache.
     try {
-        const results = await provider.search({ query: input });
+        const resp = await fetch('/geocode?q=' + encodeURIComponent(input));
+        const results = (await resp.json()) || [];
         if (results.length > 0) {
-            const { x, y } = results[0];
+            const x = parseFloat(results[0].lon);
+            const y = parseFloat(results[0].lat);
             if (!marker) {
                 marker = L.marker([y, x], { draggable: true }).addTo(map);
                 marker.on('dragend', handleMarkerDragEnd); // Add event listener for marker drag
@@ -2469,16 +2473,11 @@ function continueAfterDeveloperModeRequired() {
   var input=document.getElementById('coordinates');
   var list=document.getElementById('wsug-list');
   if(!input||!list)return;
-  var provider=null, timer=null, lastQ='', activeIdx=-1, items=[];
+  var timer=null, lastQ='', activeIdx=-1, items=[];
 
   // Looks like "lat, lng" (or "lat lng") coordinates? If so, skip autocomplete.
   function looksLikeCoords(s){
     return /^\s*-?\d{1,3}(\.\d+)?\s*[,\s]\s*-?\d{1,3}(\.\d+)?\s*$/.test(s||'');
-  }
-  function getProvider(){
-    if(provider)return provider;
-    if(window.GeoSearch&&GeoSearch.OpenStreetMapProvider){provider=new GeoSearch.OpenStreetMapProvider();}
-    return provider;
   }
   function hide(){list.classList.remove('on');list.innerHTML='';items=[];activeIdx=-1;}
   function render(results){
@@ -2502,11 +2501,13 @@ function continueAfterDeveloperModeRequired() {
     else if(typeof window.handleSearch==='function'){window.handleSearch();}
   }
   function query(q){
-    var p=getProvider();
-    if(!p){return;}
-    p.search({query:q}).then(function(results){
+    // Same server-side /geocode proxy the main search uses (Nominatim blocks
+    // direct browser requests). Nominatim rows: {display_name, lat, lon}.
+    fetch('/geocode?q='+encodeURIComponent(q)).then(function(r){return r.json();}).then(function(results){
       if(input.value.trim()!==q)return; // stale
-      render((results||[]).slice(0,7).map(function(r){return {label:r.label,x:r.x,y:r.y};}));
+      render((results||[]).slice(0,7).map(function(r){
+        return {label:r.display_name,x:parseFloat(r.lon),y:parseFloat(r.lat)};
+      }));
     }).catch(function(){hide();});
   }
   input.addEventListener('input',function(){
@@ -2537,9 +2538,9 @@ function continueAfterDeveloperModeRequired() {
     <div class="wtheme-card-title">Movement modes <span class="wmode-pro-pill">PRO</span></div>
 <div class="wmode-bar" id="wmodeBar">
   <button class="wmode-tbtn" data-mode="jump" data-pro="1" title="Jump-Teleport (Pro)">&#9889;</button>
-  <button class="wmode-tbtn" data-mode="two" data-pro="1" title="Two-Spot Route (Pro)">&#8644;</button>
+  <button class="wmode-tbtn" data-mode="two" title="Two-Spot Route">&#8644;</button>
   <button class="wmode-tbtn" data-mode="multi" data-pro="1" title="Multi-Spot Route (Pro)">&#9906;</button>
-  <button class="wmode-tbtn" data-mode="joy" data-pro="1" title="Joystick (Pro)">&#9711;</button>
+  <button class="wmode-tbtn" data-mode="joy" title="Joystick">&#9711;</button>
   <button class="wmode-tbtn" data-mode="pogo" data-pro="1" title="Pok&eacute;mon GO Mode (Pro)">&#127918;</button>
 </div>
 
@@ -2631,7 +2632,8 @@ function continueAfterDeveloperModeRequired() {
         <div class="wmode-locked-badge">&#128274; Wander Pro</div>
         <p id="wmLockedMsg">This mode is part of Wander Pro.</p>
         <button class="wmode-btn" id="wmUnlockBtn">Unlock Wander Pro</button>
-        <p class="wmode-hint" style="text-align:center;margin:8px 0 0">Teleport &amp; search stay free forever.</p>
+        <button class="wmode-btn" id="wmTrialGetPro" style="display:none">Get Pro</button>
+        <p class="wmode-hint" id="wmLockedHint" style="text-align:center;margin:8px 0 0">Teleport &amp; search stay free forever.</p>
       </div>
     </div>
 
@@ -2641,9 +2643,6 @@ function continueAfterDeveloperModeRequired() {
 
 </div>
 
-
-
-    </div>
 </div>
 <div id="wtheme-footer">
     <hr>
@@ -2695,6 +2694,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       <button type="button" class="wacct-sheet-close" id="wacctClose" aria-label="Close">&times;</button>
     </div>
     <div class="wacct-sheet-body">
+      <p class="wacct-note" id="wacctPitch" style="display:none;margin:0 0 12px;text-align:left"></p>
       <label class="wacct-lbl" for="wacctEmailIn">Email</label>
       <input class="wacct-in" id="wacctEmailIn" type="email" autocomplete="email" placeholder="you@example.com">
       <label class="wacct-lbl" for="wacctPassIn">Password</label>
@@ -3055,6 +3055,8 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     display:inline-block;background:linear-gradient(135deg,#1a9e57,#0f7a41);color:#fff;border-radius:8px;padding:3px 9px}
   .wacct-plan.free{background:#eef0f3;color:#6b7280}
   body.dark-mode .wacct-plan.free{background:#243244;color:#aebccb}
+  .wacct-trial{margin-top:6px;font-size:11.5px;color:var(--w-muted);line-height:1.4}
+  body.dark-mode .wacct-trial{color:#aebccb}
 
   .wacct-overlay{position:fixed;inset:0;z-index:20000;display:none;align-items:center;justify-content:center;
     background:rgba(10,20,35,.48);padding:18px}
@@ -3149,15 +3151,58 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   $('wmodeClose').addEventListener('click',closeCard);
 
   // ---- Free / Pro gating ----
-  var PRO_MODES={jump:1,two:1,multi:1,joy:1,pogo:1};   // Teleport + search stay free
+  var PRO_MODES={jump:1,multi:1,pogo:1};   // Teleport + search stay free; two + joy are trial modes
   function isPro(){ return window.WANDER_PRO===true || document.body.classList.contains('wander-pro'); }
   function openPricing(){ window.open('https://wanderspoofer.com/#pricing','_blank'); }
   // Future license check flips Pro on:  window.wanderSetPro(true)
   window.wanderSetPro=function(on){ window.WANDER_PRO=!!on; document.body.classList.toggle('wander-pro',!!on); };
 
+  // ---- Trial gating (free accounts; ledger lives server-side, clients only ask) ----
+  var TRIAL_PITCH='Create a free Wander account to start your trial — 5 teleports, 30 min of joystick, 3 routes. Pro unlocks everything.';
+  var PRICING_URL='https://wanderspoofer.com/pricing/';
+  function trialSignedIn(){ return !!(window.wanderAuthState && window.wanderAuthState.signedIn); }
+  function askSignIn(){
+    if(typeof window.wanderOpenAccount==='function'){ window.wanderOpenAccount(TRIAL_PITCH); }
+    else if(window.wanderToast){ window.wanderToast('Sign in to start your free trial'); }
+  }
+  function lockedReset(){                              // restore the pane for the classic Pro upsell
+    var u=$('wmUnlockBtn'); if(u) u.style.display='';
+    var g=$('wmTrialGetPro'); if(g) g.style.display='none';
+    var h=$('wmLockedHint'); if(h) h.style.display='';
+  }
+  function showExhausted(modeKey){                     // reuse the locked pane with trial-exhausted copy
+    var nm=MODE_TITLES[modeKey]||'this mode';
+    var u=$('wmUnlockBtn'); if(u) u.style.display='none';
+    var g=$('wmTrialGetPro'); if(g) g.style.display='';
+    var h=$('wmLockedHint'); if(h) h.style.display='none';
+    activeMode='__locked';
+    qsa('.wmode-tbtn').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-mode')===modeKey); });
+    qsa('.wmode-cbody .pane').forEach(function(p){ p.classList.toggle('on', p.getAttribute('data-pane')==='__locked'); });
+    $('wmodeTitle').textContent='🔒 '+nm;
+    var lm=$('wmLockedMsg'); if(lm) lm.textContent='Your free trial of '+nm+' is used up — upgrade to Wander Pro.';
+    var st=$('wmStop'); if(st) st.style.display='none';
+    $('wmodeCard').classList.add('open');
+    document.body.classList.add('wander-mode-open');
+  }
+  // Resolves true -> proceed with the action. Fail-closed for free users when the Worker is unreachable.
+  function trialGate(consumeMode, seconds, modeKey, msgEl){
+    if(isPro()) return Promise.resolve(true);
+    if(!trialSignedIn() || typeof window.wanderTrialConsume!=='function'){ askSignIn(); return Promise.resolve(false); }
+    function offlineMsg(){
+      if(msgEl) msg(msgEl,"Couldn't verify your free trial — check your connection.",false);
+      else if(window.wanderToast) window.wanderToast("Couldn't verify your free trial — check your connection");
+    }
+    return window.wanderTrialConsume(consumeMode, seconds||undefined).then(function(r){
+      if(r && r.ok && r.allowed) return true;
+      if(r && r.ok && r.allowed===false){ showExhausted(modeKey); return false; }
+      offlineMsg(); return false;
+    }).catch(function(){ offlineMsg(); return false; });
+  }
+  (function(){ var g=$('wmTrialGetPro'); if(g) g.addEventListener('click',function(){ window.open(PRICING_URL,'_blank'); }); })();
+
   function selectMode(mode){
     if(activeMode===mode){ closeCard(); return; }
-    if(PRO_MODES[mode] && !isPro()){ showLocked(mode); return; }   // free user -> upsell
+    if(PRO_MODES[mode] && !isPro()){ lockedReset(); showLocked(mode); return; }   // free user -> upsell
     if(mode==='pogo'){                                             // PoGo opens its full list, not an inline pane
       qsa('.wmode-tbtn').forEach(function(b){ b.classList.remove('on'); });
       if(window.wpogoToggle) window.wpogoToggle(true);
@@ -3184,6 +3229,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   }
   function closeCard(){
     activeMode=null;
+    if(typeof joyMeterStop==='function') joyMeterStop();   // stop joystick billing when the card is dismissed
     $('wmodeCard').classList.remove('open');
     qsa('.wmode-tbtn').forEach(function(b){ b.classList.remove('on'); });
     var st=$('wmStop'); if(st) st.style.display='';
@@ -3233,9 +3279,12 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     var v=resolve('wmTelLL');
     if(!v){ msg($('wmTelMsg'),'Enter lat,lng or click the map.',false); return; }
     if(!connected()){ notConnected($('wmTelMsg')); return; }
-    post('/wander/teleport',{lat:v[0],lng:v[1],fluctuate:$('wmTelFluc').checked})
-      .then(function(r){ if(!r.ok){ notConnected($('wmTelMsg')); return; } msg($('wmTelMsg'),'Teleported.',true); })
-      .catch(function(){ msg($('wmTelMsg'),'Network error.',false); });
+    trialGate('teleport',null,'teleport',$('wmTelMsg')).then(function(ok){
+      if(!ok) return;
+      post('/wander/teleport',{lat:v[0],lng:v[1],fluctuate:$('wmTelFluc').checked})
+        .then(function(r){ if(!r.ok){ notConnected($('wmTelMsg')); return; } msg($('wmTelMsg'),'Teleported.',true); })
+        .catch(function(){ msg($('wmTelMsg'),'Network error.',false); });
+    });
   });
 
   // ---- Jump ----
@@ -3250,11 +3299,15 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   $('wmTwoGo').addEventListener('click',function(){
     var dest=resolve('wmTwoLL');
     if(!dest){ msg($('wmTwoMsg'),'Pick a destination.',false); return; }
-    // Start = current location (map center as best available proxy on the desktop UI).
-    var startPt = (window.map && window.map.getCenter) ? [window.map.getCenter().lat, window.map.getCenter().lng] : dest;
-    post('/wander/route',{points:[startPt,dest],speed_mps:speeds.two,loop:'once'})
-      .then(function(r){ msg($('wmTwoMsg'), r.ok?'Route started.':'Request failed.', r.ok); })
-      .catch(function(){ msg($('wmTwoMsg'),'Network error.',false); });
+    if(!connected()){ notConnected($('wmTwoMsg')); return; }   // guard BEFORE consuming trial credit
+    trialGate('route',null,'two',$('wmTwoMsg')).then(function(ok){   // charged once per route start
+      if(!ok) return;
+      // Start = current location (map center as best available proxy on the desktop UI).
+      var startPt = (window.map && window.map.getCenter) ? [window.map.getCenter().lat, window.map.getCenter().lng] : dest;
+      post('/wander/route',{points:[startPt,dest],speed_mps:speeds.two,loop:'once'})
+        .then(function(r){ msg($('wmTwoMsg'), r.ok?'Route started.':'Request failed.', r.ok); })
+        .catch(function(){ msg($('wmTwoMsg'),'Network error.',false); });
+    });
   });
 
   // ---- Multi-Spot ----
@@ -3270,20 +3323,56 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     if(joyStarted)return Promise.resolve(true);
     var c=(window.map && window.map.getCenter)?window.map.getCenter():null;
     var body=c?{lat:c.lat,lng:c.lng,speed_mps:speeds.joy}:{speed_mps:speeds.joy};
-    return post('/wander/joystick/start',body).then(function(r){ joyStarted=r.ok; return r.ok; });
+    return post('/wander/joystick/start',body).then(function(r){
+      joyStarted=r.ok;
+      // Device/tunnel failed to start spoofing — stop billing so we don't burn
+      // trial seconds while nothing is actually moving.
+      if(!r.ok){ joyMeterStop(); joyHalt(false); }
+      return r.ok;
+    }).catch(function(){ joyMeterStop(); joyHalt(false); return false; });
+  }
+  // Trial meter: first chunk is charged on start, then 30s of joystick every 30s while walking.
+  var joyTimer=null;
+  function joyMeterStop(){ if(joyTimer){ clearInterval(joyTimer); joyTimer=null; } }
+  function joyHalt(exhausted){
+    joyMeterStop();
+    post('/wander/joystick/dir',{heading:0,speed_mps:speeds.joy,moving:false}).catch(function(){});
+    if(exhausted){ showExhausted('joy'); }
+    else{ msg($('wmJoyMsg'),"Couldn't verify your free trial — joystick stopped.",false); }
+  }
+  function joyMeterStart(){
+    if(joyTimer||isPro()) return;
+    joyTimer=setInterval(function(){
+      if(isPro()){ joyMeterStop(); return; }          // upgraded mid-walk: keep walking, stop charging
+      if(typeof window.wanderTrialConsume!=='function'){ joyHalt(false); return; }
+      window.wanderTrialConsume('joystick',30).then(function(r){
+        if(r && r.ok && r.allowed) return;            // next 30s paid for
+        joyHalt(!!(r && r.ok && r.allowed===false));  // exhausted -> upsell; unreachable -> fail closed
+      }).catch(function(){ joyHalt(false); });
+    },30000);
+  }
+  function joyGate(){
+    if(isPro()) return Promise.resolve(true);
+    if(joyTimer) return Promise.resolve(true);        // current 30s chunk already charged
+    return trialGate('joystick',30,'joy',$('wmJoyMsg')).then(function(ok){ if(ok) joyMeterStart(); return ok; });
   }
   qsa('.wmode-dpad button').forEach(function(b){
     b.addEventListener('click',function(){
       if(b.getAttribute('data-stop')){
+        joyMeterStop();
         post('/wander/joystick/dir',{heading:0,speed_mps:speeds.joy,moving:false})
           .then(function(r){ msg($('wmJoyMsg'), r.ok?'Stopped.':'Request failed.', r.ok); });
         return;
       }
       var head=parseFloat(b.getAttribute('data-head'));
-      joyEnsureStart().then(function(){
-        post('/wander/joystick/dir',{heading:head,speed_mps:speeds.joy,moving:true})
-          .then(function(r){ msg($('wmJoyMsg'), r.ok?('Heading '+head+'°'):'Request failed.', r.ok); })
-          .catch(function(){ msg($('wmJoyMsg'),'Network error.',false); });
+      if(!connected()){ notConnected($('wmJoyMsg')); return; }   // guard BEFORE consuming trial credit
+      joyGate().then(function(ok){
+        if(!ok) return;
+        joyEnsureStart().then(function(){
+          post('/wander/joystick/dir',{heading:head,speed_mps:speeds.joy,moving:true})
+            .then(function(r){ msg($('wmJoyMsg'), r.ok?('Heading '+head+'°'):'Request failed.', r.ok); })
+            .catch(function(){ msg($('wmJoyMsg'),'Network error.',false); });
+        });
       });
     });
   });
@@ -3291,11 +3380,36 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   // ---- shared Stop ----
   $('wmStop').addEventListener('click',function(){
     joyStarted=false;
+    joyMeterStop();
     post('/wander/stop',{}).then(function(r){
       var m=activeMode? $(({teleport:'wmTelMsg',jump:'wmJumpMsg',two:'wmTwoMsg',multi:'wmMultiMsg',joy:'wmJoyMsg'})[activeMode]) : null;
       if(m) msg(m, r.ok?'Stopped.':'Stop failed.', r.ok);
     });
   });
+
+  // ---- gate the classic "Set / Teleport" button (top-level setLocation -> POST /set_location) ----
+  (function(){
+    var orig=window.setLocation;
+    if(typeof orig!=='function') return;
+    window.setLocation=function(){
+      if(isPro()){ return orig.apply(this,arguments); }
+      var self=this, args=arguments;
+      trialGate('teleport',null,'teleport',null).then(function(ok){ if(ok) orig.apply(self,args); });
+    };
+  })();
+
+  // ---- wrap the classic "Stop" button (top-level stopLocation -> POST /stop_location) ----
+  // The search-card Stop halts spoofing on the backend but never cleared joyTimer,
+  // so joystick trial billing kept running after Stop. Wrap it to also stop the meter.
+  (function(){
+    var orig=window.stopLocation;
+    if(typeof orig!=='function') return;
+    window.stopLocation=function(){
+      joyStarted=false;
+      joyMeterStop();
+      return orig.apply(this,arguments);
+    };
+  })();
 })();
 </script>
 
@@ -3650,11 +3764,79 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   const inBox    = $("wacctIn");
   const emailLbl = $("wacctEmail");
   const planPill = $("wacctPlan");
+  const trialLine = $("wacctTrial");
+  const pitchEl  = $("wacctPitch");
 
   function showSheet(){ if(errLine) errLine.textContent=""; overlay.classList.add("open");
     overlay.setAttribute("aria-hidden","false"); setTimeout(()=>emailIn && emailIn.focus(),40); }
   function hideSheet(){ overlay.classList.remove("open"); overlay.setAttribute("aria-hidden","true"); }
   function setErr(msg){ if(errLine) errLine.textContent = msg || ""; }
+  function setPitch(text){ if(pitchEl){ pitchEl.textContent = text || ""; pitchEl.style.display = text ? "" : "none"; } }
+
+  // ---- bridge for the classic (non-module) gating script ----
+  window.wanderAuthState = { signedIn:false, pro:false };
+  window.wanderOpenAccount = function(pitch){ setPitch(pitch || ""); showSheet(); };
+
+  // ---- last-known plan cache (per uid) ----
+  // An offline Pro user must never be trial-gated while the Firestore round-trip
+  // is pending or failing. Persist the last resolved plan keyed by uid and apply
+  // a cached "pro" immediately, before/without waiting for Firestore.
+  function planCacheKey(uid){ return "wanderPlan:" + uid; }
+  function cachedPlan(uid){
+    try { return uid ? (localStorage.getItem(planCacheKey(uid)) || null) : null; }
+    catch(e){ return null; }
+  }
+  function cachePlan(uid, plan){
+    if(!uid) return;
+    try { localStorage.setItem(planCacheKey(uid), plan); } catch(e){ /* ignore */ }
+  }
+
+  const TRIAL_API = "https://wander-payments.wanderlocation.workers.dev";
+  async function trialCall(path, extra){
+    const user = auth.currentUser;
+    if(!user) return { ok:false, error:"not signed in" };
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch(TRIAL_API + path, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify(Object.assign({ idToken }, extra || {}))
+      });
+      // 401 = the Worker rejected the token (expired/invalid), not a connectivity
+      // problem. Re-open the sign-in sheet instead of showing an "offline" message.
+      if(res.status === 401){
+        setPitch("Please sign in again to continue your trial.");
+        showSheet();
+        return { ok:false, unauthorized:true };
+      }
+      return await res.json();
+    } catch(e){
+      return { ok:false, offline:true };
+    }
+  }
+  window.wanderTrialStatus = () => trialCall("/trial/status");
+  window.wanderTrialConsume = async (mode, seconds) => {
+    const body = (mode === "joystick") ? { mode, seconds: seconds || 30 } : { mode };
+    const r = await trialCall("/trial/consume", body);
+    if(r && r.ok) renderTrialLine(r);          // refresh "Trial left" after each consume
+    return r;
+  };
+
+  // "Trial left" line in the account card — free users only.
+  function renderTrialLine(data){
+    if(!trialLine) return;
+    if(!data || !data.ok || data.plan === "pro" || !data.remaining){
+      trialLine.style.display = "none"; trialLine.textContent = ""; return;
+    }
+    const r = data.remaining;
+    trialLine.textContent = "Trial left: " + r.teleports + " teleports · " +
+      Math.floor((r.joystickSeconds || 0) / 60) + "m joystick · " + r.routes + " routes";
+    trialLine.style.display = "";
+  }
+  async function refreshTrialLine(){
+    if(!auth.currentUser || window.wanderAuthState.pro){ renderTrialLine(null); return; }
+    renderTrialLine(await window.wanderTrialStatus());
+  }
 
   // Map Firebase auth error codes to friendly copy.
   function friendly(e){
@@ -3670,7 +3852,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   }
 
   // ---- control wiring ----
-  $("wacctOpen").addEventListener("click", showSheet);
+  $("wacctOpen").addEventListener("click", ()=>{ setPitch(""); showSheet(); });
   $("wacctClose").addEventListener("click", hideSheet);
   overlay.addEventListener("click", (ev)=>{ if(ev.target === overlay) hideSheet(); });
   document.addEventListener("keydown", (ev)=>{ if(ev.key === "Escape" && overlay.classList.contains("open")) hideSheet(); });
@@ -3704,38 +3886,60 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   passIn.addEventListener("keydown", (ev)=>{ if(ev.key === "Enter") $("wacctSignin").click(); });
 
   // ---- entitlement check: read licenses/{uid}, fall back to licenses/{lowercased email} ----
+  // Returns "pro" / "free" when Firestore answers authoritatively, or null when
+  // every read failed (offline) so the caller can fall back to the cached plan
+  // instead of wrongly demoting an offline Pro user to "free".
   async function planFor(user){
+    let reached = false;
     try {
       const snap = await getDoc(doc(db, "licenses", user.uid));
+      reached = true;
       if(snap.exists() && (snap.data() || {}).plan === "pro") return "pro";
     } catch(e){ /* ignore, try email fallback */ }
     if(user.email){
       try {
         const snap2 = await getDoc(doc(db, "licenses", user.email.toLowerCase()));
+        reached = true;
         if(snap2.exists()) return (snap2.data() || {}).plan || "free";
       } catch(e){ /* ignore */ }
     }
-    return "free";
+    return reached ? "free" : null;
   }
 
   // ---- auth state -> UI + Pro flip ----
   onAuthStateChanged(auth, async (user)=>{
     if(user){
+      window.wanderAuthState.signedIn = true;
       outBox.style.display = "none";
       inBox.style.display  = "";
       emailLbl.textContent = user.email || "Signed in";
       emailLbl.title       = user.email || "";
       planPill.textContent = "Checking…";
       planPill.className   = "wacct-plan free";
-      const plan = await planFor(user);
+      // Offline-safe: if we already know this uid is Pro, flip Pro NOW so the user
+      // is never trial-gated while (or if) the Firestore read is slow/unreachable.
+      if(cachedPlan(user.uid) === "pro"){
+        window.wanderAuthState.pro = true;
+        if(typeof window.wanderSetPro === "function") window.wanderSetPro(true);
+      }
+      const resolved = await planFor(user);
+      // If Firestore couldn't be reached (null), keep the last-known plan rather
+      // than demoting a possibly-Pro user to Free.
+      const plan = (resolved === null) ? (cachedPlan(user.uid) || "free") : resolved;
+      if(resolved !== null) cachePlan(user.uid, resolved);   // only cache authoritative answers
       const isPro = (plan === "pro");
+      window.wanderAuthState.pro = isPro;
       if(typeof window.wanderSetPro === "function") window.wanderSetPro(isPro);
       planPill.textContent = isPro ? "Pro" : "Free plan";
       planPill.className   = isPro ? "wacct-plan" : "wacct-plan free";
+      if(isPro){ renderTrialLine(null); } else { refreshTrialLine(); }
     } else {
+      window.wanderAuthState.signedIn = false;
+      window.wanderAuthState.pro = false;
       outBox.style.display = "";
       inBox.style.display  = "none";
       emailLbl.textContent = "";
+      renderTrialLine(null);
       if(typeof window.wanderSetPro === "function") window.wanderSetPro(false);
     }
   });
