@@ -135,7 +135,7 @@ APP_VERSION_NUMBER = "1.0.0"
 APP_VERSION_TYPE = "standard"
 # Single source of truth for the desktop app version used by the /update-check
 # route. Bump WANDER_VERSION here AND version in wander-site desktop.json each release.
-WANDER_VERSION = "1.1.0"
+WANDER_VERSION = "1.2.0"
 terminate_tunnel_thread = False
 terminate_location_thread = False
 location_threads = []
@@ -1548,25 +1548,70 @@ def geocode():
         return app.response_class(_geocode_cache[key], mimetype='application/json')
 
     import json as _json
+    _UA = {'User-Agent': 'Wander/1.0 (https://wanderspoofer.com; support@wanderspoofer.com)'}
+    results = []
+    upstream_error = False   # True = a provider errored/rate-limited (vs. a genuine "no match")
+
+    # 1) Nominatim (best display names, but rate-limits aggressively).
     try:
         resp = requests.get(
             'https://nominatim.openstreetmap.org/search',
             params={'format': 'json', 'limit': 5, 'q': q},
-            headers={'User-Agent': 'Wander/1.0 (https://wanderspoofer.com; support@wanderspoofer.com)'},
-            timeout=6,
+            headers=_UA, timeout=6,
         )
-        if resp.status_code != 200:
-            logger.error(f"geocode error: status {resp.status_code} for {q!r}")
-            return app.response_class('[]', mimetype='application/json')
-        data = resp.json()
-        if not isinstance(data, list):
-            data = []
-        payload = _json.dumps(data)
-        _geocode_cache[key] = payload
-        return app.response_class(payload, mimetype='application/json')
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list):
+                results = data
+        else:
+            upstream_error = True
+            logger.warning(f"geocode: nominatim status {resp.status_code} for {q!r}")
     except Exception as e:
-        logger.error(f"geocode error for {q!r}: {e}")
-        return app.response_class('[]', mimetype='application/json')
+        upstream_error = True
+        logger.warning(f"geocode: nominatim error for {q!r}: {e}")
+
+    # 2) Photon (komoot) fallback — same OSM data, far more lenient, no key. Runs
+    #    whenever Nominatim gave nothing (a real miss OR a rate-limit/error), which
+    #    is what makes searches keep working when Nominatim throttles us.
+    if not results:
+        try:
+            r2 = requests.get(
+                'https://photon.komoot.io/api/',
+                params={'q': q, 'limit': 5}, headers=_UA, timeout=6,
+            )
+            if r2.status_code == 200:
+                gj = r2.json()
+                for feat in (gj.get('features') or []):
+                    geom = feat.get('geometry') or {}
+                    coords = geom.get('coordinates')   # [lon, lat]
+                    if coords and len(coords) >= 2:
+                        props = feat.get('properties') or {}
+                        label = ', '.join(
+                            str(props[k]) for k in ('name', 'street', 'city', 'state', 'country')
+                            if props.get(k)
+                        )
+                        results.append({'lat': str(coords[1]), 'lon': str(coords[0]),
+                                        'display_name': label or q})
+                if results:
+                    upstream_error = False   # fallback rescued the search
+            else:
+                upstream_error = True
+                logger.warning(f"geocode: photon status {r2.status_code} for {q!r}")
+        except Exception as e:
+            upstream_error = True
+            logger.warning(f"geocode: photon error for {q!r}: {e}")
+
+    if results:
+        payload = _json.dumps(results)
+        _geocode_cache[key] = payload   # cache successes only
+        return app.response_class(payload, mimetype='application/json')
+
+    # Both providers unreachable/rate-limited → tell the client it's a transient
+    # problem, not a genuine "no such place", so the UI can say "try again".
+    if upstream_error:
+        return app.response_class(_json.dumps({'error': 'geocode_unavailable'}),
+                                  mimetype='application/json')
+    return app.response_class('[]', mimetype='application/json')
 
 
 # --- Auto update check ------------------------------------------------------
