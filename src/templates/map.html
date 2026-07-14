@@ -319,6 +319,17 @@ body.dark-mode .modal-footer button {
     <div class="wcomm-note">Chat with other travelers &amp; help Wander grow.</div>
   </div>
 
+  <!-- ===== Favorites / Saved places (scoped: wfav-) ===== -->
+  <div class="mb-3" id="wtheme-favorites">
+    <div class="wtheme-card-title">Favorites</div>
+    <div class="wfav-addrow">
+      <input type="text" class="wfav-in" id="wfavName" placeholder="Name this spot (optional)" autocomplete="off">
+      <button type="button" class="wfav-add" id="wfavAdd" title="Save the current pin / search location">★ Save</button>
+    </div>
+    <div class="wfav-list" id="wfavList"></div>
+    <div class="wfav-empty" id="wfavEmpty">No saved places yet. Search or click the map, then Save.</div>
+  </div>
+
 
 
 	<!-- Connect Device -->
@@ -2598,6 +2609,13 @@ function continueAfterDeveloperModeRequired() {
       <div class="wmode-row"><label class="wmode-lbl">Destination (lat, lng)</label>
         <input class="wmode-in" id="wmTelLL" placeholder="37.7749, -122.4194"></div>
       <label class="wmode-chk"><input type="checkbox" id="wmTelFluc" checked> Fluctuation (GPS jitter)</label>
+      <div class="wmode-row" id="wmJitRow"><label class="wmode-lbl">GPS jitter radius</label>
+        <select class="wmode-in" id="wmJitRadius" title="How far the fix drifts each tick — applies to every movement mode">
+          <option value="1.5">Tight (1.5 m)</option>
+          <option value="4.4" selected>Realistic (4.4 m)</option>
+          <option value="10">Loose (10 m)</option>
+          <option value="25">Wide (25 m)</option>
+        </select></div>
       <button class="wmode-btn" id="wmTelGo">Teleport here</button>
       <div class="wmode-msg" id="wmTelMsg"></div>
     </div>
@@ -2625,6 +2643,8 @@ function continueAfterDeveloperModeRequired() {
       <div class="wmode-speed" data-speed="two">
         <button data-mps="1.4">Walk</button><button data-mps="5" class="on">Bike</button><button data-mps="13">Drive</button>
       </div>
+      <button class="wmode-btn sm" id="wmTwoOsm" style="margin-bottom:9px" title="Set speed to the posted road speed limit from OpenStreetMap">&#128739; Use road speed limit (OSM)</button>
+      <label class="wmode-chk"><input type="checkbox" id="wmTwoRealistic" checked> Realistic movement (slow into turns)</label>
       <button class="wmode-btn" id="wmTwoGo">Walk route</button>
       <div class="wmode-msg" id="wmTwoMsg"></div>
     </div>
@@ -2635,15 +2655,19 @@ function continueAfterDeveloperModeRequired() {
       <div class="wmode-row"><label class="wmode-lbl">Add point (lat, lng)</label>
         <input class="wmode-in" id="wmMultiLL" placeholder="click map or type, then Add"></div>
       <button class="wmode-btn sm" id="wmMultiAdd" style="margin-bottom:9px">+ Add point</button>
+      <button class="wmode-btn sm" id="wmMultiImport" style="margin-bottom:9px" title="Load a GPX, KML, GeoJSON, CSV or lat,lng list as route waypoints">&#8681; Import route file</button>
+      <input type="file" id="wmMultiFile" accept=".gpx,.kml,.geojson,.json,.csv,.txt" style="display:none">
       <div class="wmode-list" id="wmMultiList"></div>
       <label class="wmode-lbl">Speed</label>
       <div class="wmode-speed" data-speed="multi">
         <button data-mps="1.4" class="on">Walk</button><button data-mps="5">Bike</button><button data-mps="13">Drive</button>
       </div>
+      <button class="wmode-btn sm" id="wmMultiOsm" style="margin-bottom:9px" title="Set speed to the posted road speed limit from OpenStreetMap">&#128739; Use road speed limit (OSM)</button>
       <div class="wmode-row"><label class="wmode-lbl">Loop</label>
         <select class="wmode-in" id="wmMultiLoop">
           <option value="once">Once</option><option value="round">Round trip</option><option value="loop">Loop forever</option>
         </select></div>
+      <label class="wmode-chk"><input type="checkbox" id="wmMultiRealistic" checked> Realistic movement (slow into turns)</label>
       <button class="wmode-btn" id="wmMultiGo">Walk route</button>
       <div class="wmode-msg" id="wmMultiMsg"></div>
     </div>
@@ -3141,6 +3165,28 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   body.dark-mode .wcomm-github{background:#e8eef5;color:#0c1a2b}
   .wcomm-note{font-size:11.5px;color:var(--w-muted);margin-top:9px;line-height:1.4;text-align:center}
   body.dark-mode .wcomm-note{color:#aebccb}
+
+  /* ---- Favorites card (scoped: wfav-) ---- */
+  .wfav-addrow{display:flex;gap:8px;margin-bottom:9px}
+  .wfav-in{flex:1;box-sizing:border-box;border:1px solid var(--w-line);border-radius:var(--w-radius-sm);
+    padding:8px 10px;font:13px var(--w-font);background:var(--w-card);color:var(--w-ink)}
+  .wfav-add{flex:none;border:none;border-radius:var(--w-radius-sm);background:var(--w-brand);color:#fff;
+    padding:8px 12px;font:600 12.5px var(--w-font);cursor:pointer;white-space:nowrap;transition:filter .15s,transform .05s}
+  .wfav-add:hover{filter:brightness(1.06)}
+  .wfav-add:active{transform:translateY(1px)}
+  .wfav-list{display:flex;flex-direction:column;gap:6px}
+  .wfav-item{display:flex;align-items:center;gap:8px;border:1px solid var(--w-line);border-radius:var(--w-radius-sm);
+    padding:7px 9px;background:var(--w-card)}
+  .wfav-item .wfav-info{flex:1;min-width:0;cursor:pointer}
+  .wfav-item .wfav-nm{font:600 13px var(--w-font);color:var(--w-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wfav-item .wfav-co{font:11px var(--w-font);color:var(--w-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wfav-go,.wfav-del{flex:none;border:none;border-radius:8px;cursor:pointer;font:600 12px var(--w-font);padding:6px 9px;transition:filter .15s}
+  .wfav-go{background:var(--w-brand);color:#fff}
+  .wfav-del{background:transparent;color:var(--w-muted);font-size:16px;line-height:1;padding:4px 7px}
+  .wfav-go:hover{filter:brightness(1.08)}
+  .wfav-del:hover{color:#e63946}
+  .wfav-empty{font:11.5px var(--w-font);color:var(--w-muted);line-height:1.4;text-align:center;padding:2px 0}
+  body.dark-mode .wfav-empty,body.dark-mode .wfav-item .wfav-co{color:#aebccb}
 </style>
 
 <!-- mode toolbar relocated into #wtheme-panel (see Movement modes card) -->
@@ -3318,6 +3364,35 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     });
   });
 
+  // ---- OSM road speed-limit lookup: set route speed to the posted limit ----
+  // Fetches the nearest road's maxspeed via the backend Overpass proxy and
+  // stores it as the custom speed for that route mode (clears preset buttons).
+  function osmLookup(key,anchorFn,btn,msgEl){
+    var pt=anchorFn();
+    if(!pt){ msg(msgEl,'Pick a destination / add a point first.',false); return; }
+    var old=btn.textContent; btn.disabled=true; btn.textContent='Looking up road speed…';
+    fetch('/wander/osm_speed?lat='+encodeURIComponent(pt[0])+'&lng='+encodeURIComponent(pt[1]))
+      .then(function(r){return r.json();})
+      .then(function(d){
+        btn.disabled=false; btn.textContent=old;
+        if(!d||!d.ok||!d.speed_mps){ msg(msgEl,(d&&d.error)||'No speed limit found nearby.',false); return; }
+        speeds[key]=d.speed_mps;
+        // Clear preset button highlight — we're now on a custom (road) speed.
+        var grp=document.querySelector('.wmode-speed[data-speed="'+key+'"]');
+        if(grp) qsa('button',grp).forEach(function(x){x.classList.remove('on');});
+        var kmh=d.speed_kmh!=null?d.speed_kmh:Math.round(d.speed_mps*3.6*10)/10;
+        var mph=Math.round(d.speed_mps*2.23694);
+        msg(msgEl,'Road speed set: '+kmh+' km/h ('+mph+' mph)'+(d.road?' · '+d.road:'')+'.',true);
+      })
+      .catch(function(){ btn.disabled=false; btn.textContent=old; msg(msgEl,'OpenStreetMap lookup failed.',false); });
+  }
+  $('wmTwoOsm').addEventListener('click',function(){
+    osmLookup('two',function(){ return resolve('wmTwoLL'); },$('wmTwoOsm'),$('wmTwoMsg'));
+  });
+  $('wmMultiOsm').addEventListener('click',function(){
+    osmLookup('multi',function(){ return multiPts.length?multiPts[0]:null; },$('wmMultiOsm'),$('wmMultiMsg'));
+  });
+
   // ---- point lists (jump + multi) ----
   function renderList(el,arr){
     el.innerHTML='';
@@ -3337,11 +3412,99 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   $('wmJumpAdd').addEventListener('click',function(){ addPoint('wmJumpLL',jumpPts,$('wmJumpList'),$('wmJumpMsg')); });
   $('wmMultiAdd').addEventListener('click',function(){ addPoint('wmMultiLL',multiPts,$('wmMultiList'),$('wmMultiMsg')); });
 
+  // ---- Import route file into Multi-Spot (GPX / KML / GeoJSON / CSV / lat,lng list) ----
+  function validPt(la,ln){ return !isNaN(la)&&!isNaN(ln)&&la>=-90&&la<=90&&ln>=-180&&ln<=180&&!(la===0&&ln===0); }
+  function parseCoordFile(name,text){
+    var pts=[], lower=(name||'').toLowerCase(), i;
+    function tryXml(){
+      try{
+        var doc=new DOMParser().parseFromString(text,'application/xml');
+        if(doc.getElementsByTagName('parsererror').length) return false;
+        // GPX: <trkpt>/<rtept>/<wpt lat= lon=>  |  KML: <coordinates>lon,lat,alt ...</coordinates>
+        var nodes=doc.querySelectorAll('trkpt,rtept,wpt'), got=false;
+        for(i=0;i<nodes.length;i++){
+          var la=parseFloat(nodes[i].getAttribute('lat')), ln=parseFloat(nodes[i].getAttribute('lon'));
+          if(validPt(la,ln)){ pts.push([la,ln]); got=true; }
+        }
+        var coords=doc.getElementsByTagName('coordinates');
+        for(i=0;i<coords.length;i++){
+          var toks=(coords[i].textContent||'').trim().split(/\s+/);
+          for(var t=0;t<toks.length;t++){
+            var c=toks[t].split(',');            // KML order is lon,lat[,alt]
+            if(c.length>=2){ var kln=parseFloat(c[0]), kla=parseFloat(c[1]); if(validPt(kla,kln)){ pts.push([kla,kln]); got=true; } }
+          }
+        }
+        return got;
+      }catch(e){ return false; }
+    }
+    function tryGeoJson(){
+      try{
+        var gj=JSON.parse(text), got=false;
+        (function walk(node){
+          if(!node||typeof node!=='object') return;
+          if(node.type==='Point'&&node.coordinates){ var p=node.coordinates; if(validPt(p[1],p[0])){pts.push([p[1],p[0]]);got=true;} }
+          else if((node.type==='LineString'||node.type==='MultiPoint')&&node.coordinates){
+            node.coordinates.forEach(function(p){ if(validPt(p[1],p[0])){pts.push([p[1],p[0]]);got=true;} });
+          }
+          else if((node.type==='Polygon'||node.type==='MultiLineString')&&node.coordinates){
+            node.coordinates.forEach(function(ring){ ring.forEach(function(p){ if(validPt(p[1],p[0])){pts.push([p[1],p[0]]);got=true;} }); });
+          }
+          if(node.geometry) walk(node.geometry);
+          if(node.features) node.features.forEach(walk);
+          if(node.geometries) node.geometries.forEach(walk);
+        })(gj);
+        return got;
+      }catch(e){ return false; }
+    }
+    function tryPlain(){                          // CSV / TSV / "lat, lng" one per line
+      var lines=text.split(/\r?\n/), got=false;
+      for(i=0;i<lines.length;i++){
+        var parts=lines[i].split(/[,\t;]+/).map(function(s){return parseFloat(s);}).filter(function(n){return !isNaN(n);});
+        if(parts.length>=2){ if(validPt(parts[0],parts[1])){ pts.push([parts[0],parts[1]]); got=true; } }
+      }
+      return got;
+    }
+    if(lower.match(/\.(gpx|kml|xml)$/)) { if(!tryXml()) { if(!tryGeoJson()) tryPlain(); } }
+    else if(lower.match(/\.(geojson|json)$/)) { if(!tryGeoJson()) { if(!tryXml()) tryPlain(); } }
+    else { if(!tryPlain()) { if(!tryXml()) tryGeoJson(); } }
+    // De-dupe consecutive identical points (common in dense tracks).
+    var out=[]; for(i=0;i<pts.length;i++){ var p=pts[i]; if(!out.length||out[out.length-1][0]!==p[0]||out[out.length-1][1]!==p[1]) out.push([+p[0],+p[1]]); }
+    return out;
+  }
+  $('wmMultiImport').addEventListener('click',function(){ $('wmMultiFile').value=''; $('wmMultiFile').click(); });
+  $('wmMultiFile').addEventListener('change',function(){
+    var f=this.files&&this.files[0]; if(!f) return;
+    if(f.size>4*1024*1024){ msg($('wmMultiMsg'),'File too large (max 4 MB).',false); return; }
+    var rd=new FileReader();
+    rd.onload=function(){
+      var pts;
+      try{ pts=parseCoordFile(f.name,String(rd.result||'')); }
+      catch(e){ msg($('wmMultiMsg'),'Could not read that file.',false); return; }
+      if(!pts||!pts.length){ msg($('wmMultiMsg'),'No coordinates found in that file.',false); return; }
+      if(pts.length>2000) pts=pts.slice(0,2000);      // guard against huge tracks
+      multiPts.length=0; Array.prototype.push.apply(multiPts,pts);
+      renderList($('wmMultiList'),multiPts);
+      msg($('wmMultiMsg'),'Imported '+multiPts.length+' waypoint(s) from '+f.name+'.',true);
+      if(window.map&&window.map.fitBounds&&multiPts.length){
+        try{ window.map.fitBounds(multiPts,{padding:[30,30],maxZoom:15}); }catch(e){}
+      }
+    };
+    rd.onerror=function(){ msg($('wmMultiMsg'),'Could not read that file.',false); };
+    rd.readAsText(f);
+  });
+
   // ---- device-connected guard (shared with the PoGo script) ----
   function connected(){ return !window.wanderDeviceConnected || window.wanderDeviceConnected(); }
   function notConnected(el){
     msg(el,'Connect your device first.',false);
     if(window.wanderToast)window.wanderToast('Connect your device first');
+  }
+
+  // ---- configurable GPS jitter radius (metres) — one setting shared by every mode ----
+  function jitterM(){
+    var sel=$('wmJitRadius'); if(!sel) return undefined;
+    var v=parseFloat(sel.value);
+    return isNaN(v)?undefined:v;
   }
 
   // ---- Teleport ----
@@ -3351,16 +3514,30 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     if(!connected()){ notConnected($('wmTelMsg')); return; }
     trialGate('teleport',null,'teleport',$('wmTelMsg')).then(function(ok){
       if(!ok) return;
-      post('/wander/teleport',{lat:v[0],lng:v[1],fluctuate:$('wmTelFluc').checked})
+      post('/wander/teleport',{lat:v[0],lng:v[1],fluctuate:$('wmTelFluc').checked,jitter_m:jitterM()})
         .then(function(r){ if(!r.ok){ notConnected($('wmTelMsg')); return; } msg($('wmTelMsg'),'Teleported.',true); })
         .catch(function(){ msg($('wmTelMsg'),'Network error.',false); });
     });
   });
 
+  // ---- Public teleport for Favorites/quick-picks: reuses trial gating + jitter radius ----
+  // Returns a Promise<bool> (true once the teleport request was actually sent).
+  window.wanderFavTeleport=function(lat,lng){
+    if(!connected()){ if(window.wanderToast)window.wanderToast('Connect your device first'); return Promise.resolve(false); }
+    return trialGate('teleport',null,'teleport',null).then(function(ok){
+      if(!ok) return false;
+      return post('/wander/teleport',{lat:lat,lng:lng,fluctuate:($('wmTelFluc')?$('wmTelFluc').checked:true),jitter_m:jitterM()})
+        .then(function(r){
+          if(window.wanderToast) window.wanderToast(r.ok?'📍 Teleported to favorite':'⚠️ Teleport failed');
+          return !!r.ok;
+        }).catch(function(){ if(window.wanderToast)window.wanderToast('⚠️ Network error'); return false; });
+    });
+  };
+
   // ---- Jump ----
   $('wmJumpGo').addEventListener('click',function(){
     if(jumpPts.length<1){ msg($('wmJumpMsg'),'Add at least one point.',false); return; }
-    post('/wander/jump',{points:jumpPts,auto_cooldown:$('wmJumpAuto').checked,fluctuate:$('wmJumpFluc').checked})
+    post('/wander/jump',{points:jumpPts,auto_cooldown:$('wmJumpAuto').checked,fluctuate:$('wmJumpFluc').checked,jitter_m:jitterM()})
       .then(function(r){ msg($('wmJumpMsg'), r.ok?'Jump-teleport started.':'Request failed.', r.ok); })
       .catch(function(){ msg($('wmJumpMsg'),'Network error.',false); });
   });
@@ -3374,7 +3551,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       if(!ok) return;
       // Start = current location (map center as best available proxy on the desktop UI).
       var startPt = (window.map && window.map.getCenter) ? [window.map.getCenter().lat, window.map.getCenter().lng] : dest;
-      post('/wander/route',{points:[startPt,dest],speed_mps:speeds.two,loop:'once'})
+      post('/wander/route',{points:[startPt,dest],speed_mps:speeds.two,loop:'once',jitter_m:jitterM(),realistic:$('wmTwoRealistic').checked})
         .then(function(r){ msg($('wmTwoMsg'), r.ok?'Route started.':'Request failed.', r.ok); })
         .catch(function(){ msg($('wmTwoMsg'),'Network error.',false); });
     });
@@ -3383,7 +3560,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   // ---- Multi-Spot ----
   $('wmMultiGo').addEventListener('click',function(){
     if(multiPts.length<2){ msg($('wmMultiMsg'),'Add at least two points.',false); return; }
-    post('/wander/route',{points:multiPts,speed_mps:speeds.multi,loop:$('wmMultiLoop').value})
+    post('/wander/route',{points:multiPts,speed_mps:speeds.multi,loop:$('wmMultiLoop').value,jitter_m:jitterM(),realistic:$('wmMultiRealistic').checked})
       .then(function(r){ msg($('wmMultiMsg'), r.ok?'Route started.':'Request failed.', r.ok); })
       .catch(function(){ msg($('wmMultiMsg'),'Network error.',false); });
   });
@@ -3480,6 +3657,87 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       return orig.apply(this,arguments);
     };
   })();
+})();
+</script>
+
+<!-- ===== Favorites / Saved places (localStorage; scoped: wfav-) ===== -->
+<script>
+(function(){
+  "use strict";
+  function $(id){return document.getElementById(id);}
+  var KEY='wander.favorites.v1';
+  var listEl=$('wfavList'), emptyEl=$('wfavEmpty'), nameIn=$('wfavName'), addBtn=$('wfavAdd');
+  if(!listEl) return;   // card not present -> nothing to wire
+
+  function load(){
+    try{ var a=JSON.parse(localStorage.getItem(KEY)||'[]'); return Array.isArray(a)?a:[]; }
+    catch(e){ return []; }
+  }
+  function save(a){ try{ localStorage.setItem(KEY,JSON.stringify(a)); }catch(e){} }
+
+  // Best-available "current" coordinate: the search box, then the draggable marker.
+  function currentCoord(){
+    var box=$('coordinates');
+    if(box&&box.value){
+      var m=String(box.value).split(',');
+      if(m.length===2){ var la=parseFloat(m[0]),ln=parseFloat(m[1]);
+        if(!isNaN(la)&&!isNaN(ln)&&la>=-90&&la<=90&&ln>=-180&&ln<=180) return {lat:la,lng:ln}; }
+    }
+    if(window.marker&&window.marker.getLatLng){ var ll=window.marker.getLatLng(); return {lat:ll.lat,lng:ll.lng}; }
+    return null;
+  }
+
+  function fmt(n){ return (Math.round(n*100000)/100000).toFixed(5); }
+
+  function render(){
+    var favs=load();
+    listEl.innerHTML='';
+    emptyEl.style.display=favs.length?'none':'';
+    favs.forEach(function(f,i){
+      var row=document.createElement('div'); row.className='wfav-item';
+      var info=document.createElement('div'); info.className='wfav-info'; info.title='Center map on this spot';
+      var nm=document.createElement('div'); nm.className='wfav-nm'; nm.textContent=f.name||('Spot '+(i+1));
+      var co=document.createElement('div'); co.className='wfav-co'; co.textContent=fmt(f.lat)+', '+fmt(f.lng);
+      info.appendChild(nm); info.appendChild(co);
+      info.addEventListener('click',function(){ centerOn(f.lat,f.lng); });
+      var go=document.createElement('button'); go.className='wfav-go'; go.textContent='Go'; go.title='Teleport here';
+      go.addEventListener('click',function(){ centerOn(f.lat,f.lng); if(typeof window.wanderFavTeleport==='function') window.wanderFavTeleport(f.lat,f.lng); });
+      var del=document.createElement('button'); del.className='wfav-del'; del.innerHTML='&times;'; del.title='Remove';
+      del.addEventListener('click',function(){ var a=load(); a.splice(i,1); save(a); render(); });
+      row.appendChild(info); row.appendChild(go); row.appendChild(del);
+      listEl.appendChild(row);
+    });
+  }
+
+  // Center map + drop the pin + sync the classic coordinate state (so Set/Teleport works too).
+  function centerOn(lat,lng){
+    if(window.map&&window.map.setView){
+      try{ window.map.setView([lat,lng], Math.max(13,window.map.getZoom?window.map.getZoom():13)); }catch(e){}
+      if(window.marker&&window.marker.setLatLng) window.marker.setLatLng([lat,lng]);
+      else if(window.L&&window.map){ try{ window.marker=window.L.marker([lat,lng],{draggable:true}).addTo(window.map);
+        if(typeof window.handleMarkerDragEnd==='function') window.marker.on('dragend',window.handleMarkerDragEnd); }catch(e){} }
+    }
+    if(typeof window.setCoordinates==='function'){ try{ window.setCoordinates(lat,lng); }catch(e){} }
+  }
+
+  addBtn.addEventListener('click',function(){
+    var c=currentCoord();
+    if(!c){
+      if(window.wanderToast) window.wanderToast('Search or click the map first, then Save');
+      else { emptyEl.textContent='Search or click the map first, then Save.'; emptyEl.style.display=''; }
+      return;
+    }
+    var favs=load();
+    // Skip near-duplicates (~11 m) so repeated saves don't pile up.
+    var dup=favs.some(function(f){ return Math.abs(f.lat-c.lat)<0.0001 && Math.abs(f.lng-c.lng)<0.0001; });
+    if(dup){ if(window.wanderToast) window.wanderToast('That spot is already saved'); nameIn.value=''; return; }
+    favs.push({name:(nameIn.value||'').trim(), lat:c.lat, lng:c.lng, ts:Date.now()});
+    save(favs); nameIn.value=''; render();
+    if(window.wanderToast) window.wanderToast('★ Saved to Favorites');
+  });
+  nameIn.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); addBtn.click(); } });
+
+  render();
 })();
 </script>
 

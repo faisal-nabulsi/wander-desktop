@@ -1162,10 +1162,89 @@ def _build_path(points, speed_mps, interval=1.0, loop="once"):
     return samples
 
 
-def _jitter(lat, lng, on):
-    if on:
+def _bearing(lat1, lon1, lat2, lon2):
+    """Initial compass bearing (0=N, 90=E) from point A to point B, in degrees."""
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dl = math.radians(lon2 - lon1)
+    y = math.sin(dl) * math.cos(p2)
+    x = math.cos(p1) * math.sin(p2) - math.sin(p1) * math.cos(p2) * math.cos(dl)
+    return (math.degrees(math.atan2(y, x)) + 360.0) % 360.0
+
+
+def _turn_angle(b1, b2):
+    """Smallest absolute change in heading (0..180) between two bearings."""
+    d = abs((b2 - b1 + 180.0) % 360.0 - 180.0)
+    return d
+
+
+def _build_realistic_path(points, speed_mps, interval=1.0, loop="once"):
+    """Like _build_path but models human/vehicle movement: slow down into sharp
+    turns, ease back up on the straights, and add small speed variance so the
+    trace never looks like a metronome. Mirrors iOS buildRealisticSamples."""
+    seq = list(points)
+    if loop == "round" and len(seq) > 1:
+        seq = seq + list(reversed(seq[:-1]))
+    if len(seq) < 2:
+        return []
+
+    # Per-segment bearings so we can measure how sharp each corner is.
+    bearings = [_bearing(seq[i][0], seq[i][1], seq[i + 1][0], seq[i + 1][1])
+                for i in range(len(seq) - 1)]
+
+    base = max(0.2, speed_mps)
+    samples = []
+    for i in range(len(seq) - 1):
+        a, b = seq[i], seq[i + 1]
+        dist = _haversine_m(a[0], a[1], b[0], b[1])
+        if dist <= 0.0:
+            continue
+        # Turn severity at the *start* of this segment (how hard we just cornered).
+        if i == 0:
+            weight_in = 1.0
+        else:
+            ang = _turn_angle(bearings[i - 1], bearings[i])
+            # 0 deg -> full speed, 90 deg -> ~0.55x, 180 deg (U-turn) -> ~0.28x.
+            weight_in = max(0.28, 1.0 - (ang / 180.0) * 0.72)
+        # Ease back to cruising speed by the end of the segment.
+        seg_speed_start = base * weight_in
+        seg_speed_end = base
+        steps = max(1, int(dist / max(0.1, base * interval)))
+        for s in range(1, steps + 1):
+            f = s / steps
+            # Linear ramp from the slowed corner speed back up to cruise.
+            spd = seg_speed_start + (seg_speed_end - seg_speed_start) * f
+            spd *= random.uniform(0.88, 1.12)          # +/-12% natural variance
+            spd = max(0.2, spd)
+            lat = a[0] + (b[0] - a[0]) * f
+            lng = a[1] + (b[1] - a[1]) * f
+            # Emit (lat, lng, dwell) so the pump waits longer where we move slower.
+            step_dist = dist / steps
+            dwell = max(0.2, min(4.0, step_dist / spd))
+            samples.append((lat, lng, dwell))
+    return samples
+
+
+def _jitter(lat, lng, on, radius_m=None):
+    """Nudge the point by a small random offset so the fix looks like a real GPS
+    reading. `radius_m` is the max offset in metres; None keeps the legacy ~4.4 m
+    default. Longitude degrees are scaled by cos(lat) so the radius is metric."""
+    if not on:
+        return (lat, lng)
+    if radius_m is None:
+        # Legacy behaviour: +/- 0.00004 deg (~4.4 m at the equator) on each axis.
         lat += random.uniform(-0.00004, 0.00004)
         lng += random.uniform(-0.00004, 0.00004)
+        return (lat, lng)
+    try:
+        r = max(0.0, float(radius_m))
+    except (TypeError, ValueError):
+        r = 0.0
+    if r <= 0.0:
+        return (lat, lng)
+    dlat = r / 111320.0                                     # metres -> degrees latitude
+    dlng = r / (111320.0 * max(0.01, math.cos(math.radians(lat))))
+    lat += random.uniform(-dlat, dlat)
+    lng += random.uniform(-dlng, dlng)
     return (lat, lng)
 
 
@@ -1227,9 +1306,10 @@ def wander_teleport():
     d = request.get_json(force=True) or {}
     lat, lng = float(d['lat']), float(d['lng'])
     fluc = bool(d.get('fluctuate'))
+    jm = d.get('jitter_m')
 
     def nxt():
-        return _jitter(lat, lng, fluc)   # hold the point (re-jitter if enabled)
+        return _jitter(lat, lng, fluc, jm)   # hold the point (re-jitter if enabled)
     _start_stream(nxt, "teleport")
     return jsonify({"ok": True, "lat": lat, "lng": lng})
 
@@ -1240,8 +1320,15 @@ def wander_route():
     pts = [(float(p[0]), float(p[1])) for p in d['points']]
     speed = float(d.get('speed_mps', 1.4))
     loop = d.get('loop', 'once')              # once | round | loop
-    fluc = bool(d.get('fluctuate') or d.get('realistic'))
-    samples = _build_path(pts, speed, 1.0, 'round' if loop == 'round' else 'once')
+    realistic = bool(d.get('realistic'))
+    fluc = bool(d.get('fluctuate') or realistic)
+    jm = d.get('jitter_m')
+    seg_loop = 'round' if loop == 'round' else 'once'
+    if realistic:
+        # Turn-aware samples carry their own dwell time (lat, lng, dwell).
+        samples = _build_realistic_path(pts, speed, 1.0, seg_loop)
+    else:
+        samples = _build_path(pts, speed, 1.0, seg_loop)
     _move_state["total"] = len(samples)
     idx = {"i": 0}
 
@@ -1252,14 +1339,19 @@ def wander_route():
                 idx["i"] = 0
                 i = 0
             else:
-                lat, lng = samples[-1] if samples else pts[-1]
-                return _jitter(lat, lng, fluc)   # hold at the end
-        lat, lng = samples[i]
+                last = samples[-1] if samples else pts[-1]
+                lat, lng = last[0], last[1]
+                return _jitter(lat, lng, fluc, jm)   # hold at the end
+        smp = samples[i]
+        lat, lng = smp[0], smp[1]
         idx["i"] = i + 1
         _move_state["point"] = idx["i"]
-        return _jitter(lat, lng, fluc)
+        j = _jitter(lat, lng, fluc, jm)
+        if len(smp) > 2:                              # realistic path -> honour dwell
+            return (j[0], j[1], smp[2])
+        return j
     _start_stream(nxt, "route")
-    return jsonify({"ok": True, "samples": len(samples)})
+    return jsonify({"ok": True, "samples": len(samples), "realistic": realistic})
 
 
 @app.route('/wander/jump', methods=['POST'])
@@ -1268,6 +1360,7 @@ def wander_jump():
     seq = [(float(p[0]), float(p[1])) for p in d['points']]
     auto = bool(d.get('auto_cooldown'))
     fluc = bool(d.get('fluctuate'))
+    jm = d.get('jitter_m')
     _move_state["total"] = len(seq)
     st = {"i": 0, "prev": None}
 
@@ -1275,7 +1368,7 @@ def wander_jump():
         i = st["i"]
         if i >= len(seq):
             lat, lng = seq[-1]
-            return _jitter(lat, lng, fluc)       # hold last
+            return _jitter(lat, lng, fluc, jm)       # hold last
         lat, lng = seq[i]
         wait = 1.0
         if auto and st["prev"] is not None:
@@ -1284,7 +1377,7 @@ def wander_jump():
         st["prev"] = (lat, lng)
         st["i"] = i + 1
         _move_state["point"] = st["i"]
-        j = _jitter(lat, lng, fluc)
+        j = _jitter(lat, lng, fluc, jm)
         return (j[0], j[1], wait)
     _start_stream(nxt, "jump")
     return jsonify({"ok": True, "points": len(seq)})
@@ -1327,6 +1420,71 @@ def wander_joystick_dir():
 def wander_cooldown():
     km = float(request.args.get('km', 0))
     return jsonify({"km": km, "minutes": pogo_cooldown_minutes(km)})
+
+
+def _parse_maxspeed(raw):
+    """Turn an OSM maxspeed tag ('50', '30 mph', 'RU:urban', 'walk') into m/s."""
+    if not raw:
+        return None
+    s = str(raw).strip().lower()
+    if s in ('none', 'signals', 'variable'):
+        return None
+    if s == 'walk':
+        return 1.4
+    m = re.search(r'(\d+(?:\.\d+)?)', s)
+    if not m:
+        return None
+    val = float(m.group(1))
+    if 'mph' in s:
+        return val * 0.44704            # miles/h -> m/s
+    if 'knot' in s:
+        return val * 0.514444
+    return val / 3.6                    # default km/h -> m/s
+
+
+@app.route('/wander/osm_speed', methods=['GET'])
+def wander_osm_speed():
+    """Look up the posted speed limit of the nearest road via OpenStreetMap's
+    Overpass API and return it in m/s so route modes can drive at road speed.
+    Mirrors iOS speedLimit mode (fetchOpenStreetMapWays)."""
+    try:
+        lat = float(request.args.get('lat'))
+        lng = float(request.args.get('lng'))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "lat/lng required"}), 400
+    # Search outward until we find a highway with a maxspeed tag.
+    query = (
+        '[out:json][timeout:12];'
+        'way(around:180,%f,%f)[highway][maxspeed];'
+        'out tags center 1;'
+    ) % (lat, lng)
+    endpoints = [
+        'https://overpass-api.de/api/interpreter',
+        'https://overpass.kumi.systems/api/interpreter',
+    ]
+    for url in endpoints:
+        try:
+            r = requests.post(url, data={'data': query}, timeout=15,
+                              headers={'User-Agent': 'Wander-Desktop/1.0'})
+            if r.status_code != 200:
+                continue
+            js = r.json()
+            for el in js.get('elements', []):
+                mps = _parse_maxspeed((el.get('tags') or {}).get('maxspeed'))
+                if mps and mps > 0:
+                    tags = el.get('tags') or {}
+                    return jsonify({
+                        "ok": True,
+                        "speed_mps": round(mps, 2),
+                        "speed_kmh": round(mps * 3.6, 1),
+                        "maxspeed": tags.get('maxspeed'),
+                        "road": tags.get('name') or tags.get('highway'),
+                    })
+            return jsonify({"ok": False, "error": "no speed limit found nearby"})
+        except Exception as e:
+            logger.error(f"osm_speed error ({url}): {e}")
+            continue
+    return jsonify({"ok": False, "error": "OpenStreetMap lookup failed"}), 502
 
 
 @app.route('/wander/stop', methods=['POST'])
