@@ -1,0 +1,72 @@
+name: Upload planet basemap to R2
+
+# Streams the Protomaps planet .pmtiles straight into your R2 bucket from a
+# GitHub-hosted runner (stable datacenter network) — no laptop bandwidth, no
+# external drive. Run it from the Actions tab (Run workflow) after adding the
+# three R2 secrets below. This repo is public, so Actions minutes are free.
+#
+# Required repo secrets (Settings -> Secrets and variables -> Actions):
+#   R2_ACCESS_KEY_ID      - your ROTATED R2 API token Access Key ID
+#   R2_SECRET_ACCESS_KEY  - the matching Secret
+#   R2_ACCOUNT_ID         - your Cloudflare account id (the R2 endpoint subdomain)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_date:
+        description: "Protomaps build date YYYYMMDD (see maps.protomaps.com/builds/)"
+        required: true
+        default: "20260714"
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350   # the 127 GB stream is bandwidth-bound; give it room
+    steps:
+      - name: Install rclone
+        run: |
+          curl -fsSL https://rclone.org/install.sh | sudo bash
+          rclone version
+
+      - name: Configure R2 remote
+        env:
+          R2_KEY: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT: ${{ secrets.R2_ACCOUNT_ID }}
+        run: |
+          if [ -z "$R2_KEY" ] || [ -z "$R2_SECRET" ] || [ -z "$R2_ACCOUNT" ]; then
+            echo "::error::Missing R2 secrets. Add R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ACCOUNT_ID."
+            exit 1
+          fi
+          mkdir -p ~/.config/rclone
+          cat > ~/.config/rclone/rclone.conf <<CONF
+          [r2]
+          type = s3
+          provider = Cloudflare
+          access_key_id = ${R2_KEY}
+          secret_access_key = ${R2_SECRET}
+          endpoint = https://${R2_ACCOUNT}.r2.cloudflarestorage.com
+          acl = private
+          CONF
+
+      - name: Stream planet -> R2
+        run: |
+          set -o pipefail
+          DATE="${{ inputs.build_date }}"
+          echo "Uploading https://build.protomaps.com/${DATE}.pmtiles -> r2:wander-basemap/planet.pmtiles"
+          # Primary: rclone http backend reads via HTTP range requests and does an
+          # S3 multipart upload, retrying individual chunks (survives blips, no full-disk buffer).
+          if rclone copyto ":http:${DATE}.pmtiles" "r2:wander-basemap/planet.pmtiles" \
+               --http-url "https://build.protomaps.com" \
+               --s3-no-check-bucket --s3-chunk-size 256M \
+               --low-level-retries 30 --retries 5 --retries-sleep 30s \
+               -v --stats 60s --stats-one-line ; then
+            echo "Upload complete via rclone http backend."
+          else
+            echo "http-backend copy failed; falling back to curl | rclone rcat"
+            curl --http1.1 --retry 12 --retry-delay 15 -fSL "https://build.protomaps.com/${DATE}.pmtiles" \
+              | rclone rcat "r2:wander-basemap/planet.pmtiles" --s3-no-check-bucket --s3-chunk-size 128M -v
+          fi
+
+      - name: Verify size in R2
+        run: rclone size r2:wander-basemap/planet.pmtiles
