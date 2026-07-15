@@ -4,6 +4,17 @@ This is the one part of the PMTiles migration that isn't code — it needs your 
 
 **You do NOT need to build the basemap** — Protomaps publishes a daily pre-built planet, so this is a download + re-upload, not a `planetiler` run.
 
+**You do NOT need ~107 GB of free disk, either.** Stream the planet straight from Protomaps into R2 so it only passes *through* your machine in small chunks (needs just your bandwidth + a small buffer):
+
+```bash
+# Configure an rclone remote for R2 first (rclone config → S3 → Cloudflare R2, with your
+# R2 access key/secret + the https://<ACCOUNT_ID>.r2.cloudflarestorage.com endpoint). Then:
+curl -L "https://build.protomaps.com/20260714.pmtiles" | \
+  rclone rcat r2:wander-basemap/planet.pmtiles --s3-chunk-size 128M
+```
+
+That's the recommended path. If you'd rather land the file first (needs the disk space, or use an **external drive** — the file only transits through), the step-by-step download + upload is below.
+
 ## 1. Get the planet `.pmtiles` (~107 GB)
 
 Install the `pmtiles` CLI (`brew install pmtiles` or from github.com/protomaps/go-pmtiles releases), then grab the latest Protomaps build:
