@@ -1,0 +1,55 @@
+# Hosting the PMTiles planet basemap on Cloudflare R2
+
+This is the one part of the PMTiles migration that isn't code — it needs your Cloudflare account. Once the planet `.pmtiles` is on R2, every platform (desktop `protomaps-leaflet`, iOS/Android MapLibre) reads its basemap from that one URL, fully licence-clean (ODbL) and offline-capable.
+
+**You do NOT need to build the basemap** — Protomaps publishes a daily pre-built planet, so this is a download + re-upload, not a `planetiler` run.
+
+## 1. Get the planet `.pmtiles` (~107 GB)
+
+Install the `pmtiles` CLI (`brew install pmtiles` or from github.com/protomaps/go-pmtiles releases), then grab the latest Protomaps build:
+
+```bash
+# List available daily builds and pick the newest date:
+#   https://maps.protomaps.com/builds/   (files look like 20260714.pmtiles)
+curl -L -o planet.pmtiles "https://build.protomaps.com/20260714.pmtiles"   # ~107 GB, needs the disk space
+```
+
+(Optional sanity check: `pmtiles show planet.pmtiles` should print the header + tile counts.)
+
+## 2. Create an R2 bucket + upload
+
+```bash
+# Create the bucket (Cloudflare dashboard → R2, or wrangler):
+npx wrangler r2 bucket create wander-basemap
+
+# Upload the 107 GB file. wrangler is slow for this size — use rclone or aws-cli against R2's S3 endpoint:
+#   Account ID + an R2 API token (Cloudflare dashboard → R2 → Manage API Tokens).
+rclone copyto planet.pmtiles r2:wander-basemap/planet.pmtiles \
+  --s3-endpoint "https://<ACCOUNT_ID>.r2.cloudflarestorage.com" --progress
+```
+
+## 3. Make it publicly range-readable (+ CORS)
+
+PMTiles is served by **HTTP range requests**, so the object must be publicly GET-able with `Range` allowed.
+
+- **Public URL:** R2 → your bucket → Settings → either enable the `r2.dev` public URL or (better) connect a **custom domain** (e.g. `tiles.wanderspoofer.com`).
+- **CORS policy** on the bucket (R2 → Settings → CORS):
+  ```json
+  [{ "AllowedOrigins": ["*"], "AllowedMethods": ["GET","HEAD"], "AllowedHeaders": ["Range"], "ExposeHeaders": ["Content-Range","Content-Length","ETag"], "MaxAgeSeconds": 86400 }]
+  ```
+
+Your basemap URL is now e.g. `https://tiles.wanderspoofer.com/planet.pmtiles`.
+
+## 4. Point the clients at it
+
+- **Desktop:** set `window.WANDER_PMTILES_URL` in `src/templates/map.html` (currently defaults to the Protomaps demo bucket for dev — swap it to your R2 URL before shipping; the demo bucket is not for production).
+- **iOS / Android (MapLibre phase):** the PMTiles source URL is a single constant per app — point it at the same R2 URL.
+
+## Cost (rough)
+
+R2 storage ≈ **$0.015/GB-mo → ~$1.6/mo** for 107 GB. R2 has **zero egress fees**, so serving tiles is effectively free (Class B operations are cheap). Re-upload a fresh planet every month or two to keep the map current.
+
+## Offline (per platform)
+
+- **Desktop:** `pip install pmtiles`; a "download this region" action runs `pmtiles extract <R2 url> region.pmtiles --bbox=...` server-side into a local file that `protomaps-leaflet` reads with no network.
+- **Mobile:** MapLibre Native's built-in offline-pack manager downloads a bbox+zoom range from the R2 source into its local cache.

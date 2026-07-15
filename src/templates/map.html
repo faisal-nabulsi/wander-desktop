@@ -14,6 +14,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/leaflet-providers@2.0.0/leaflet-providers.min.js"></script>
+    <script src="{{ url_for('static', filename='protomaps-leaflet.js') }}"></script>
     <script src="https://unpkg.com/leaflet-geosearch@3.0.0/dist/geosearch.umd.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-gpx/1.7.0/gpx.min.js"></script>
     <!-- <script src="https://cdn.jsdelivr.net/npm/leaflet-geojson-export@2.1.1/dist/leaflet-geojson-export.min.js"></script> -->
@@ -959,8 +960,18 @@ async function initializeMap(userLocale) {
     // Add default tile layer
     stadiaTileLayer.addTo(map);
 
+    // Protomaps vector basemap (PMTiles) — license-clean + offline-capable. Source is config-driven:
+    // the Protomaps demo planet for now; set window.WANDER_PMTILES_URL to your Cloudflare R2 URL once
+    // the planet .pmtiles is hosted there (see docs/PMTILES-R2.md).
+    var PMTILES_URL = (window.WANDER_PMTILES_URL || 'https://demo-bucket.protomaps.com/v4.pmtiles');
+    var protomapsLayer = null;
+    try {
+        protomapsLayer = protomapsL.leafletLayer({ url: PMTILES_URL, theme: 'light',
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://protomaps.com">Protomaps</a>' });
+    } catch (e) { protomapsLayer = null; }
+
     // Define tile layer control options
-    // Curated, de-cluttered basemap set (was 15 providers — trimmed to 6 clean options)
+    // Curated, de-cluttered basemap set.
     var baseLayers = {
         "Default": stadiaTileLayer,
         "Streets": openStreetMapTileLayer,
@@ -969,6 +980,7 @@ async function initializeMap(userLocale) {
         "Outdoors": Stadia_Outdoors,
         "Watercolor": Stadia_StamenWatercolor,
     };
+    if (protomapsLayer) { baseLayers["Vector (PMTiles)"] = protomapsLayer; }
 
     // Layer switcher: collapsed icon, top-left so it joins the zoom stack (which
     // the theme CSS relocates to the bottom-left, clear of the top-right mode bar).
