@@ -6,11 +6,29 @@ This is the one part of the PMTiles migration that isn't code — it needs your 
 
 **You do NOT need ~107 GB of free disk, either.** Stream the planet straight from Protomaps into R2 so it only passes *through* your machine in small chunks (needs just your bandwidth + a small buffer):
 
+Run these one at a time. (Lines starting with `#` are comments — your interactive shell may try to run them, so skip them.)
+
 ```bash
-# Configure an rclone remote for R2 first (rclone config → S3 → Cloudflare R2, with your
-# R2 access key/secret + the https://<ACCOUNT_ID>.r2.cloudflarestorage.com endpoint). Then:
-curl -L "https://build.protomaps.com/20260714.pmtiles" | \
-  rclone rcat r2:wander-basemap/planet.pmtiles --s3-chunk-size 128M
+# 1. Install rclone (once):
+brew install rclone
+
+# 2. One-time R2 config. Get an R2 API token: Cloudflare dashboard → R2 → "Manage R2 API Tokens"
+#    → Create (Object Read & Write) → note Access Key ID, Secret, and your Account ID. Then:
+mkdir -p ~/.config/rclone
+cat >> ~/.config/rclone/rclone.conf <<'CONF'
+[r2]
+type = s3
+provider = Cloudflare
+access_key_id = YOUR_R2_ACCESS_KEY_ID
+secret_access_key = YOUR_R2_SECRET
+endpoint = https://YOUR_ACCOUNT_ID.r2.cloudflarestorage.com
+acl = private
+CONF
+rclone mkdir r2:wander-basemap
+
+# 3. Find the latest build date at https://maps.protomaps.com/builds/ , then stream it in
+#    (this is ONE line — ~107 GB, so it runs for a while, bandwidth-bound):
+curl -L "https://build.protomaps.com/20260714.pmtiles" | rclone rcat r2:wander-basemap/planet.pmtiles --s3-chunk-size 128M
 ```
 
 That's the recommended path. If you'd rather land the file first (needs the disk space, or use an **external drive** — the file only transits through), the step-by-step download + upload is below.
