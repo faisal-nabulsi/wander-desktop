@@ -174,15 +174,14 @@ def create_wander_folder():
         logger.info(f"Wander Home: {wander_folder}")
         logger.info("Wander folder created successfully")
 
-    # Set permissions for the Wander folder
+    # Restrict the Wander folder to the current user only — never world-writable.
     if current_platform == 'win32':
-        # Windows permissions (read/write for everyone)
-        os.system(f"icacls {wander_folder} /grant Everyone:(OI)(CI)F")
-        logger.info("Permissions set for Wander folder on Windows")
-    else:  # Linux and MacOS
-        # POSIX permissions (read/write for everyone)
-        os.chmod(wander_folder, 0o777)
-        logger.info("Permissions set for Wander folder on MacOS")
+        # Reset inherited ACLs and grant full control to the current user only.
+        os.system(f'icacls "{wander_folder}" /inheritance:r /grant:r "%USERNAME%":(OI)(CI)F')
+        logger.info("Permissions set (owner-only) for Wander folder on Windows")
+    else:  # Linux and macOS
+        os.chmod(wander_folder, 0o700)  # owner read/write/execute only
+        logger.info("Permissions set (owner-only) for Wander folder on macOS")
 
 
 
@@ -383,10 +382,12 @@ def get_user_country():
 
 def get_country_from_ip():
     try:
-        response = requests.get("http://ip-api.com/json/", timeout=3)
+        # HTTPS geolocation (ip-api.com's free tier is HTTP-only; ipapi.co supports TLS).
+        # The country is untrusted display input for region/pricing only, with a safe None fallback.
+        response = requests.get("https://ipapi.co/json/", timeout=3)
         if response.status_code == 200:
             data = response.json()
-            country_name = data.get("country")
+            country_name = data.get("country_name") or data.get("country")
             if country_name:
                 return country_name
             else:
