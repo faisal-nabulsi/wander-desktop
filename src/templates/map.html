@@ -307,6 +307,12 @@ body.dark-mode .modal-footer button {
       </div>
       <div class="wacct-plan" id="wacctPlan"></div>
       <div class="wacct-trial" id="wacctTrial" style="display:none"></div>
+      <!-- Device registration status + Manage devices (scoped: wdev-) -->
+      <div class="wdev-line" id="wacctDevLine" style="display:none"></div>
+      <div class="wdev-atlimit" id="wacctDevLimit" style="display:none">
+        This device isn't activated — you've reached your device limit. Remove one to use Pro here.
+      </div>
+      <button type="button" class="wdev-manage" id="wacctManageDevices" style="display:none">Manage devices</button>
     </div>
   </div>
 
@@ -3122,6 +3128,22 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   </div>
 </div>
 
+<!-- ===== Manage devices modal (scoped: wdev-) — lists this account's registered devices ===== -->
+<div class="wacct-overlay" id="wdevOverlay" aria-hidden="true">
+  <div class="wacct-sheet" role="dialog" aria-modal="true" aria-labelledby="wdevSheetTitle">
+    <div class="wacct-sheet-head">
+      <h4 id="wdevSheetTitle">Your devices</h4>
+      <button type="button" class="wacct-sheet-close" id="wdevClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="wacct-sheet-body">
+      <div class="wdev-count" id="wdevCount"></div>
+      <div class="wdev-list" id="wdevList"></div>
+      <div class="wdev-empty" id="wdevEmpty" style="display:none">No devices registered yet.</div>
+      <p class="wacct-note">Pro works on a limited number of devices. Remove a device to free up a slot.</p>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="developerModeModal" tabindex="-1" role="dialog" aria-labelledby="devModalLabel" aria-hidden="true">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
@@ -3521,6 +3543,35 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   .wacct-btn.ghost{background:transparent;color:var(--w-brand);border:1px solid var(--w-brand)}
   .wacct-btn.ghost:hover{background:var(--w-brand);color:#fff;filter:none}
   .wacct-note{font-size:12px;color:var(--w-muted);margin:6px 0 0;line-height:1.45;text-align:center}
+
+  /* ---- Device registration status + Manage devices (scoped: wdev-) ---- */
+  .wdev-line{margin-top:6px;font-size:11.5px;color:var(--w-muted);line-height:1.4}
+  body.dark-mode .wdev-line{color:#aebccb}
+  .wdev-atlimit{margin-top:6px;font-size:11.5px;color:#b4551d;line-height:1.4;
+    background:#fdf1e6;border:1px solid #f3d3b0;border-radius:var(--w-radius-sm);padding:7px 9px}
+  body.dark-mode .wdev-atlimit{color:#f0b784;background:#2a1f12;border-color:#4a3418}
+  .wdev-manage{margin-top:8px;border:1px solid var(--w-line);background:transparent;color:var(--w-brand);
+    border-radius:999px;font:600 12.5px var(--w-font);padding:6px 14px;cursor:pointer;transition:background .15s,color .15s}
+  .wdev-manage:hover{background:var(--w-brand);color:#fff;border-color:var(--w-brand)}
+  body.dark-mode .wdev-manage{border-color:#2b3a4d}
+  .wdev-count{font-size:12.5px;font-weight:600;color:var(--w-muted);margin-bottom:10px}
+  body.dark-mode .wdev-count{color:#aebccb}
+  .wdev-list{display:flex;flex-direction:column;gap:8px}
+  .wdev-item{display:flex;align-items:center;gap:10px;border:1px solid var(--w-line);border-radius:var(--w-radius-sm);
+    padding:9px 11px;background:#fff}
+  body.dark-mode .wdev-item{background:#0f1925;border-color:#2b3a4d}
+  .wdev-item-info{flex:1;min-width:0}
+  .wdev-item-name{font-size:13px;font-weight:600;color:var(--w-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .wdev-item-meta{font-size:11px;color:var(--w-muted);margin-top:2px}
+  body.dark-mode .wdev-item-meta{color:#aebccb}
+  .wdev-this{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:800;letter-spacing:.4px;
+    padding:1px 6px;border-radius:6px;background:var(--w-brand);color:#fff;vertical-align:middle}
+  .wdev-remove{border:none;background:#f2e2e0;color:#c0392b;border-radius:8px;font:600 12px var(--w-font);
+    padding:6px 12px;cursor:pointer;flex:none;transition:filter .15s}
+  .wdev-remove:hover{filter:brightness(1.05)}
+  .wdev-remove:disabled{opacity:.55;cursor:default}
+  body.dark-mode .wdev-remove{background:#3a201d;color:#e88}
+  .wdev-empty{font-size:12.5px;color:var(--w-muted);text-align:center;padding:8px 0}
 
   /* ---- Community card (scoped: wcomm-) ---- */
   .wcomm-row{display:flex;gap:8px}
@@ -4905,6 +4956,229 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     return r;
   };
 
+  // ============================================================================
+  // Device registration (scoped: wdev-) — layers on top of the existing account
+  // system. This device's *effective* Pro = (account Pro from Firestore) AND the
+  // Worker having activated this device. FAIL-SAFE: if /account/activate errors
+  // (offline/timeout/500/etc.) we change NOTHING and keep whatever Pro the
+  // existing account logic already resolved — the user is never locked out by a
+  // registration hiccup. Only an explicit {ok:true, registered:false, atLimit:true}
+  // response gates Pro on THIS device (and shows the Manage devices prompt).
+  // ============================================================================
+  const devLine   = $("wacctDevLine");
+  const devLimit  = $("wacctDevLimit");
+  const manageBtn = $("wacctManageDevices");
+  const devOverlay= $("wdevOverlay");
+  const devCountEl= $("wdevCount");
+  const devListEl = $("wdevList");
+  const devEmptyEl= $("wdevEmpty");
+
+  // Stable per-install device id, generated once and persisted.
+  function getDeviceId(){
+    let id = null;
+    try { id = localStorage.getItem("wanderDeviceId"); } catch(e){}
+    if(!id){
+      id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+         : ("wd-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2,10));
+      try { localStorage.setItem("wanderDeviceId", id); } catch(e){}
+    }
+    return id;
+  }
+  // Platform string the Worker expects: "mac" | "windows". Derive from the
+  // template's current_platform ("MacOS"/"Windows"/…) first, then navigator.
+  function getPlatform(){
+    const tpl = ("{{ current_platform }}" || "").toLowerCase();
+    if(tpl.indexOf("mac") === 0 || tpl.indexOf("darwin") === 0) return "mac";
+    if(tpl.indexOf("win") === 0) return "windows";
+    const np = (navigator.platform || navigator.userAgent || "").toLowerCase();
+    if(np.indexOf("mac") !== -1) return "mac";
+    if(np.indexOf("win") !== -1) return "windows";
+    return "mac"; // desktop app only ships mac/windows; default to mac
+  }
+  // Short human label, e.g. "Mac · Chrome".
+  function getDeviceName(){
+    const plat = getPlatform() === "windows" ? "Windows PC" : "Mac";
+    const ua = navigator.userAgent || "";
+    let browser = "";
+    if(/edg\//i.test(ua))       browser = "Edge";
+    else if(/chrome\//i.test(ua)) browser = "Chrome";
+    else if(/safari\//i.test(ua)) browser = "Safari";
+    else if(/firefox\//i.test(ua))browser = "Firefox";
+    return browser ? (plat + " · " + browser) : plat;
+  }
+  const THIS_DEVICE_ID = getDeviceId();
+  const THIS_PLATFORM  = getPlatform();
+  const THIS_NAME      = getDeviceName();
+
+  // Registration state for THIS device (updated by activateDevice).
+  // accountPro = the plan Pro the existing account logic resolved.
+  // registered/atLimit/limit/devices come straight from /account/activate.
+  const devState = { accountPro:false, registered:true, atLimit:false, limit:0, devices:[], known:false };
+
+  function accountCall(path, extra){
+    const user = auth.currentUser;
+    if(!user) return Promise.resolve({ ok:false, error:"not signed in" });
+    return user.getIdToken().then((idToken)=>
+      fetch(TRIAL_API + path, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify(Object.assign({ idToken }, extra || {}))
+      }).then((res)=> res.json())
+    ).catch(()=> ({ ok:false, offline:true }));
+  }
+
+  // Compute effective Pro for THIS device and push it through the SAME
+  // window.wanderSetPro() bridge the rest of the app already listens to.
+  function applyEffectivePro(){
+    // Effective Pro = account Pro AND this device is registered.
+    // If we've never gotten a successful activate response (known=false), fall
+    // back to account Pro alone — never demote on missing/failed registration.
+    const gated = devState.known && devState.accountPro && devState.atLimit && !devState.registered;
+    const effective = devState.accountPro && (devState.known ? devState.registered : true);
+    if(typeof window.wanderSetPro === "function") window.wanderSetPro(!!effective);
+    window.wanderAuthState.pro = !!effective;
+    renderDeviceStatusLine(gated);
+  }
+
+  // The small status line + "Manage devices" button in the account card.
+  function renderDeviceStatusLine(gated){
+    if(!devLine) return;
+    if(!window.wanderAuthState.signedIn){
+      devLine.style.display = "none";
+      if(devLimit)  devLimit.style.display = "none";
+      if(manageBtn) manageBtn.style.display = "none";
+      return;
+    }
+    if(devState.known && devState.limit){
+      const n = (devState.devices || []).length;
+      devLine.textContent = "Devices: " + n + " of " + devState.limit + " · this device: " +
+        (devState.registered ? "activated" : "not activated");
+      devLine.style.display = "";
+      if(manageBtn) manageBtn.style.display = "";
+    } else {
+      devLine.style.display = "none";
+      // Still let a Pro user open the (possibly empty) manager once we've registered.
+      if(manageBtn) manageBtn.style.display = devState.known ? "" : "none";
+    }
+    if(devLimit) devLimit.style.display = gated ? "" : "none";
+  }
+
+  // Register THIS device with the Worker. accountPro is the plan Pro already
+  // resolved by the existing auth flow; pass it in so effective-Pro can be
+  // recomputed. FAIL-SAFE on any error: leave devState untouched.
+  async function activateDevice(accountPro){
+    devState.accountPro = !!accountPro;
+    if(!auth.currentUser){ applyEffectivePro(); return; }
+    let r;
+    try {
+      r = await accountCall("/account/activate", {
+        deviceId: THIS_DEVICE_ID,
+        platform: THIS_PLATFORM,
+        deviceName: THIS_NAME
+      });
+    } catch(e){ r = { ok:false, offline:true }; }
+    // Only trust an explicit ok:true response. Anything else = fail-safe no-op.
+    if(r && r.ok === true){
+      devState.known      = true;
+      devState.registered = (r.registered !== false);   // default to registered unless told false
+      devState.atLimit    = !!r.atLimit;
+      devState.limit      = r.limit || devState.limit || 0;
+      devState.devices    = Array.isArray(r.devices) ? r.devices : [];
+    }
+    applyEffectivePro();
+  }
+  window.wanderActivateDevice = activateDevice;
+
+  // ---- Manage devices modal ----
+  function openDevSheet(){
+    renderDeviceList();
+    devOverlay.classList.add("open");
+    devOverlay.setAttribute("aria-hidden","false");
+  }
+  function closeDevSheet(){
+    devOverlay.classList.remove("open");
+    devOverlay.setAttribute("aria-hidden","true");
+  }
+  function fmtLastSeen(ts){
+    if(!ts) return "";
+    let d = ts;
+    if(typeof ts === "number") d = new Date(ts < 1e12 ? ts * 1000 : ts);
+    else if(typeof ts === "string") d = new Date(ts);
+    if(!(d instanceof Date) || isNaN(d.getTime())) return "";
+    return "last seen " + d.toLocaleDateString();
+  }
+  function renderDeviceList(){
+    if(!devListEl) return;
+    const devices = devState.devices || [];
+    if(devCountEl) devCountEl.textContent =
+      devices.length + " of " + (devState.limit || devices.length) + " devices";
+    devListEl.innerHTML = "";
+    if(!devices.length){
+      if(devEmptyEl) devEmptyEl.style.display = "";
+      return;
+    }
+    if(devEmptyEl) devEmptyEl.style.display = "none";
+    devices.forEach((dev)=>{
+      const isThis = dev.deviceId === THIS_DEVICE_ID;
+      const item = document.createElement("div");
+      item.className = "wdev-item";
+
+      const info = document.createElement("div");
+      info.className = "wdev-item-info";
+      const name = document.createElement("div");
+      name.className = "wdev-item-name";
+      name.textContent = dev.name || dev.deviceName || (dev.platform === "windows" ? "Windows PC" : "Mac");
+      if(isThis){
+        const tag = document.createElement("span");
+        tag.className = "wdev-this";
+        tag.textContent = "THIS DEVICE";
+        name.appendChild(tag);
+      }
+      const meta = document.createElement("div");
+      meta.className = "wdev-item-meta";
+      const platLabel = dev.platform === "windows" ? "Windows" : (dev.platform === "mac" ? "Mac" : (dev.platform || ""));
+      const seen = fmtLastSeen(dev.lastSeen);
+      meta.textContent = [platLabel, seen].filter(Boolean).join(" · ");
+      info.appendChild(name);
+      info.appendChild(meta);
+
+      const rm = document.createElement("button");
+      rm.type = "button";
+      rm.className = "wdev-remove";
+      rm.textContent = "Remove";
+      rm.addEventListener("click", ()=> removeDevice(dev.deviceId, rm));
+
+      item.appendChild(info);
+      item.appendChild(rm);
+      devListEl.appendChild(item);
+    });
+  }
+  async function removeDevice(deviceId, btn){
+    if(!deviceId) return;
+    if(btn){ btn.disabled = true; btn.textContent = "Removing…"; }
+    const r = await accountCall("/account/devices/remove", { deviceId });
+    if(r && r.ok === true){
+      devState.devices = Array.isArray(r.devices) ? r.devices : [];
+      // Removing THIS device de-activates it here; removing another may free a slot.
+      const stillHere = devState.devices.some((d)=> d.deviceId === THIS_DEVICE_ID);
+      if(deviceId === THIS_DEVICE_ID){
+        devState.registered = false;
+      } else if(!stillHere){
+        devState.registered = false;
+      }
+      devState.atLimit = false;   // a removal always frees a slot
+      renderDeviceList();
+      applyEffectivePro();
+    } else {
+      if(btn){ btn.disabled = false; btn.textContent = "Remove"; }
+    }
+  }
+
+  if(manageBtn) manageBtn.addEventListener("click", openDevSheet);
+  if($("wdevClose")) $("wdevClose").addEventListener("click", closeDevSheet);
+  if(devOverlay) devOverlay.addEventListener("click", (ev)=>{ if(ev.target === devOverlay) closeDevSheet(); });
+  document.addEventListener("keydown", (ev)=>{ if(ev.key === "Escape" && devOverlay && devOverlay.classList.contains("open")) closeDevSheet(); });
+
   // "Trial left" line in the account card — free users only.
   function renderTrialLine(data){
     if(!trialLine) return;
@@ -5016,6 +5290,9 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       planPill.textContent = isPro ? "Pro" : "Free plan";
       planPill.className   = isPro ? "wacct-plan" : "wacct-plan free";
       if(isPro){ renderTrialLine(null); } else { refreshTrialLine(); }
+      // Register THIS device on top of the resolved account Pro. Fully fail-safe:
+      // any error leaves the Pro state above exactly as-is (see activateDevice).
+      activateDevice(isPro);
     } else {
       window.wanderAuthState.signedIn = false;
       window.wanderAuthState.pro = false;
@@ -5024,6 +5301,11 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       emailLbl.textContent = "";
       renderTrialLine(null);
       if(typeof window.wanderSetPro === "function") window.wanderSetPro(false);
+      // Reset device registration state + hide the device UI on sign-out.
+      devState.known = false; devState.accountPro = false; devState.registered = true;
+      devState.atLimit = false; devState.devices = []; devState.limit = 0;
+      renderDeviceStatusLine(false);
+      if(devOverlay && devOverlay.classList.contains("open")) closeDevSheet();
     }
   });
 </script>
