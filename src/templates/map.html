@@ -3129,6 +3129,15 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       <input class="wacct-in" id="wacctPassIn" type="password" autocomplete="current-password" placeholder="Your password">
       <button type="button" class="wacct-link" id="wacctForgot">Forgot password?</button>
       <div class="wacct-err" id="wacctErr"></div>
+      <!-- 2FA challenge: revealed only when Firebase rejects sign-in with
+           auth/multi-factor-auth-required. Enrollment is website-only. -->
+      <div id="wacct2fa" style="display:none">
+        <label class="wacct-lbl" for="wacct2faIn">Enter your authenticator code</label>
+        <input class="wacct-in" id="wacct2faIn" type="text" inputmode="numeric" autocomplete="one-time-code"
+               pattern="[0-9]*" maxlength="6" placeholder="123456">
+        <button type="button" class="wacct-btn" id="wacct2faVerify">Verify code</button>
+        <p class="wacct-note" style="text-align:left">Manage 2FA at wanderspoofer.com/account</p>
+      </div>
       <button type="button" class="wacct-btn" id="wacctSignin">Sign in</button>
       <button type="button" class="wacct-btn ghost" id="wacctCreate">Create account</button>
       <div class="wacct-or"><span>or</span></div>
@@ -5006,7 +5015,8 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
            onAuthStateChanged, signOut, sendPasswordResetEmail,
            GoogleAuthProvider, OAuthProvider, signInWithPopup,
-           signInWithRedirect, getRedirectResult }
+           signInWithRedirect, getRedirectResult,
+           getMultiFactorResolver, TotpMultiFactorGenerator }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import { getFirestore, doc, getDoc, collection, getDocs, setDoc }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -5037,10 +5047,28 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   const planPill = $("wacctPlan");
   const trialLine = $("wacctTrial");
   const pitchEl  = $("wacctPitch");
+  const twofaBox = $("wacct2fa");        // 2FA challenge container (hidden until required)
+  const twofaIn  = $("wacct2faIn");      // 6-digit authenticator code input
 
-  function showSheet(){ if(errLine) errLine.textContent=""; overlay.classList.add("open");
+  function showSheet(){ if(errLine) errLine.textContent=""; hide2fa(); overlay.classList.add("open");
     overlay.setAttribute("aria-hidden","false"); setTimeout(()=>emailIn && emailIn.focus(),40); }
-  function hideSheet(){ overlay.classList.remove("open"); overlay.setAttribute("aria-hidden","true"); }
+  function hideSheet(){ overlay.classList.remove("open"); overlay.setAttribute("aria-hidden","true"); hide2fa(); }
+
+  // ---- TOTP 2FA challenge (enrollment is website-only; desktop only resolves it) ----
+  // Holds the getMultiFactorResolver(auth, err) result between the rejected sign-in
+  // and the verify-code step. Null when no challenge is in flight.
+  let mfaResolver = null;
+  function hide2fa(){
+    if(twofaBox) twofaBox.style.display = "none";
+    if(twofaIn)  twofaIn.value = "";
+    mfaResolver = null;
+  }
+  function show2fa(resolver){
+    mfaResolver = resolver;
+    if(twofaBox) twofaBox.style.display = "";
+    setErr("Enter your authenticator code to finish signing in.");
+    setTimeout(()=>{ if(twofaIn){ twofaIn.focus(); } }, 40);
+  }
   function setErr(msg){ if(errLine) errLine.textContent = msg || ""; }
   function setPitch(text){ if(pitchEl){ pitchEl.textContent = text || ""; pitchEl.style.display = text ? "" : "none"; } }
 
@@ -5383,15 +5411,59 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       hideSheet();                 // onAuthStateChanged takes over from here
       passIn.value = "";
     } catch(e){
-      setErr(friendly(e));
+      if(!maybe2fa(e)) setErr(friendly(e));
     } finally {
       busy(false); btn.textContent = prev;
+    }
+  }
+
+  // Detect the multi-factor challenge and reveal the code input. Returns true when
+  // the error was a 2FA prompt (so callers skip showing a generic error message).
+  // Works for BOTH email/password and Google popup/redirect sign-in — Firebase raises
+  // the same auth/multi-factor-auth-required code from all of them.
+  function maybe2fa(e){
+    if(!e || e.code !== "auth/multi-factor-auth-required") return false;
+    try {
+      const resolver = getMultiFactorResolver(auth, e);
+      show2fa(resolver);
+      return true;
+    } catch(err){
+      setErr(friendly(err));
+      return true;
+    }
+  }
+
+  // Resolve the TOTP challenge with the code the user typed. Success flows through
+  // the existing onAuthStateChanged -> plan logic, same as a normal sign-in.
+  async function verify2fa(){
+    if(!mfaResolver){ setErr("Start signing in again to enter your code."); return; }
+    const code = (twofaIn.value || "").replace(/\D/g, "").trim();
+    if(code.length !== 6){ setErr("Enter the 6-digit code from your authenticator app."); return; }
+    setErr(""); busy(true);
+    const vbtn = $("wacct2faVerify"); const prev = vbtn.textContent; vbtn.disabled = true; vbtn.textContent = "Verifying…";
+    try {
+      const assertion = TotpMultiFactorGenerator.assertionForSignIn(mfaResolver.hints[0].uid, code);
+      await mfaResolver.resolveSignIn(assertion);
+      passIn.value = "";
+      hideSheet();                 // onAuthStateChanged takes over from here
+    } catch(e){
+      const c = (e && e.code) || "";
+      if(c.includes("invalid-verification-code") || c.includes("invalid-payload") || c.includes("argument-error"))
+        setErr("That code didn't match. Check your authenticator app and try again.");
+      else
+        setErr(friendly(e));
+    } finally {
+      busy(false); vbtn.disabled = false; vbtn.textContent = prev;
     }
   }
 
   $("wacctSignin").addEventListener("click", ()=> doAuth(signInWithEmailAndPassword, "signin"));
   $("wacctCreate").addEventListener("click", ()=> doAuth(createUserWithEmailAndPassword, "create"));
   passIn.addEventListener("keydown", (ev)=>{ if(ev.key === "Enter") $("wacctSignin").click(); });
+
+  // ---- 2FA verify wiring ----
+  $("wacct2faVerify").addEventListener("click", verify2fa);
+  twofaIn.addEventListener("keydown", (ev)=>{ if(ev.key === "Enter") verify2fa(); });
 
   // ---- Forgot password: send a reset email to whatever's in the email field ----
   // Uses the SAME status area as the pitch line (setPitch) plus the error line so
@@ -5445,7 +5517,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
         throw e;
       }
     } catch(e){
-      setErr(friendly(e));
+      if(!maybe2fa(e)) setErr(friendly(e));
     } finally {
       busy(false); if(label) label.textContent = prev;
     }
@@ -5464,7 +5536,17 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   // onAuthStateChanged. Silent no-op when there was no redirect in flight.
   getRedirectResult(auth).then((res)=>{
     if(res && res.user){ hideSheet(); }
-  }).catch((e)=>{ setErr(friendly(e)); });
+  }).catch((e)=>{
+    // A 2FA-enrolled user coming back from a full-page Google redirect lands here with
+    // auth/multi-factor-auth-required — re-open the sheet, THEN reveal the code input
+    // (showSheet() clears stale 2FA state via hide2fa(), so reveal must come after).
+    if(e && e.code === "auth/multi-factor-auth-required"){
+      showSheet();
+      if(!maybe2fa(e)) setErr(friendly(e));
+      return;
+    }
+    setErr(friendly(e));
+  });
 
   // ---- entitlement check: read licenses/{uid}, fall back to licenses/{lowercased email} ----
   // Returns "pro" / "free" when Firestore answers authoritatively, or null when
