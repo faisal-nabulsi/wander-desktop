@@ -3127,9 +3127,26 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       <input class="wacct-in" id="wacctEmailIn" type="email" autocomplete="email" placeholder="you@example.com">
       <label class="wacct-lbl" for="wacctPassIn">Password</label>
       <input class="wacct-in" id="wacctPassIn" type="password" autocomplete="current-password" placeholder="Your password">
+      <button type="button" class="wacct-link" id="wacctForgot">Forgot password?</button>
       <div class="wacct-err" id="wacctErr"></div>
       <button type="button" class="wacct-btn" id="wacctSignin">Sign in</button>
       <button type="button" class="wacct-btn ghost" id="wacctCreate">Create account</button>
+      <div class="wacct-or"><span>or</span></div>
+      <button type="button" class="wacct-btn oauth google" id="wacctGoogle">
+        <svg class="wacct-oauth-ic" viewBox="0 0 18 18" aria-hidden="true" width="18" height="18">
+          <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/>
+          <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"/>
+          <path fill="#FBBC05" d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.82.96 4.05l3.01-2.33z"/>
+          <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.46 3.44 1.35l2.58-2.58C13.47.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/>
+        </svg>
+        <span>Continue with Google</span>
+      </button>
+      <button type="button" class="wacct-btn oauth apple" id="wacctApple">
+        <svg class="wacct-oauth-ic" viewBox="0 0 16 16" aria-hidden="true" width="16" height="16">
+          <path fill="#fff" d="M11.18 8.51c.02 2.2 1.93 2.93 1.95 2.94-.02.05-.31 1.05-1.01 2.09-.6.9-1.24 1.79-2.24 1.81-.98.02-1.3-.58-2.42-.58-1.12 0-1.47.56-2.4.6-.96.04-1.7-.97-2.31-1.87-1.24-1.8-2.19-5.1-.92-7.33.63-1.1 1.76-1.8 2.99-1.82.95-.02 1.85.64 2.43.64.58 0 1.67-.79 2.82-.68.48.02 1.83.2 2.7 1.46-.07.04-1.61.94-1.59 2.8zM9.36 3.3c.51-.62.86-1.48.76-2.34-.74.03-1.63.49-2.16 1.11-.47.55-.89 1.43-.78 2.27.83.07 1.67-.42 2.18-1.04z"/>
+        </svg>
+        <span>Continue with Apple</span>
+      </button>
       <p class="wacct-note">Bought on wanderspoofer.com? Sign in here to unlock Pro.</p>
     </div>
   </div>
@@ -3551,6 +3568,20 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   .wacct-btn.ghost{background:transparent;color:var(--w-brand);border:1px solid var(--w-brand)}
   .wacct-btn.ghost:hover{background:var(--w-brand);color:#fff;filter:none}
   .wacct-note{font-size:12px;color:var(--w-muted);margin:6px 0 0;line-height:1.45;text-align:center}
+  /* Forgot-password link + OAuth buttons (Google / Apple) */
+  .wacct-link{display:inline-block;background:none;border:none;padding:0;margin:-4px 0 10px;
+    font:600 12px var(--w-font);color:var(--w-brand);cursor:pointer;text-decoration:underline}
+  .wacct-link:hover{filter:brightness(1.1)}
+  .wacct-or{display:flex;align-items:center;gap:10px;margin:4px 0 11px;color:var(--w-muted);
+    font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  .wacct-or::before,.wacct-or::after{content:"";flex:1;height:1px;background:var(--w-line)}
+  .wacct-btn.oauth{display:flex;align-items:center;justify-content:center;gap:9px}
+  .wacct-btn.oauth.google{background:#fff;color:#3c4043;border:1px solid var(--w-line)}
+  .wacct-btn.oauth.google:hover{background:#f7f8fa;filter:none}
+  body.dark-mode .wacct-btn.oauth.google{background:#fff;color:#3c4043}
+  .wacct-btn.oauth.apple{background:#000;color:#fff;border:1px solid #000}
+  .wacct-btn.oauth.apple:hover{filter:brightness(1.15)}
+  .wacct-oauth-ic{flex:0 0 auto;display:block}
 
   /* ---- Device registration status + Manage devices (scoped: wdev-) ---- */
   .wdev-line{margin-top:6px;font-size:11.5px;color:var(--w-muted);line-height:1.4}
@@ -4971,7 +5002,9 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
-           onAuthStateChanged, signOut }
+           onAuthStateChanged, signOut, sendPasswordResetEmail,
+           GoogleAuthProvider, OAuthProvider, signInWithPopup,
+           signInWithRedirect, getRedirectResult }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import { getFirestore, doc, getDoc, collection, getDocs, setDoc }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -5313,6 +5346,10 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     if(c.includes("email-already-in-use")) return "That email already has an account — try Sign in.";
     if(c.includes("weak-password"))        return "Password should be at least 6 characters.";
     if(c.includes("too-many-requests"))    return "Too many attempts. Wait a moment and try again.";
+    if(c.includes("account-exists-with-different-credential"))
+      return "This email is already registered with a different sign-in method.";
+    if(c.includes("unauthorized-domain"))  return "This sign-in method isn't authorized for this domain yet.";
+    if(c.includes("operation-not-allowed"))return "This sign-in method isn't enabled for this project yet.";
     if(c.includes("network"))              return "Network error. Check your connection and retry.";
     return (e && e.message) ? e.message : "Something went wrong. Please try again.";
   }
@@ -5327,6 +5364,9 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   function busy(on){
     $("wacctSignin").disabled = on;
     $("wacctCreate").disabled = on;
+    $("wacctGoogle").disabled = on;
+    $("wacctApple").disabled  = on;
+    $("wacctForgot").disabled = on;
   }
 
   async function doAuth(fn, workingLabel){
@@ -5350,6 +5390,79 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   $("wacctSignin").addEventListener("click", ()=> doAuth(signInWithEmailAndPassword, "signin"));
   $("wacctCreate").addEventListener("click", ()=> doAuth(createUserWithEmailAndPassword, "create"));
   passIn.addEventListener("keydown", (ev)=>{ if(ev.key === "Enter") $("wacctSignin").click(); });
+
+  // ---- Forgot password: send a reset email to whatever's in the email field ----
+  // Uses the SAME status area as the pitch line (setPitch) plus the error line so
+  // the user sees either a green confirmation or a friendly error, in-sheet.
+  $("wacctForgot").addEventListener("click", async ()=>{
+    const email = (emailIn.value || "").trim();
+    if(!email){ setErr("Enter your email above first, then tap Forgot password."); emailIn.focus(); return; }
+    setErr(""); busy(true);
+    const link = $("wacctForgot"); const prev = link.textContent; link.textContent = "Sending…";
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setPitch("Password reset email sent to " + email + ". Check your inbox (and spam).");
+    } catch(e){
+      setErr(friendly(e));
+    } finally {
+      busy(false); link.textContent = prev;
+    }
+  });
+
+  // ---- Google / Apple OAuth ----
+  // pywebview's embedded webview MAY not honor window.open, which signInWithPopup
+  // needs. So we TRY the popup and, if it fails for a popup-specific reason
+  // (blocked / unsupported / closed by the host / operation-not-supported), we fall
+  // back to signInWithRedirect: the webview navigates out to the provider and back.
+  // Either way the existing onAuthStateChanged handler picks up the signed-in user.
+  function isPopupUnsupported(e){
+    const c = (e && e.code) || "";
+    // NOTE: popup-closed-by-user / cancelled-popup-request mean the popup DID open and the user
+    // deliberately dismissed it — that's a cancel, not "popups don't work here", so we do NOT fall
+    // through to a full-page redirect for those (that would yank the user away right after they cancelled).
+    return c.includes("popup-blocked")
+        || c.includes("operation-not-supported-in-this-environment")
+        || c.includes("web-storage-unsupported")
+        || c.includes("internal-error");   // pywebview often surfaces a missing window.open as this
+  }
+  async function oauthSignIn(provider, btnId){
+    setErr(""); busy(true);
+    const btn = $(btnId); const label = btn.querySelector("span");
+    const prev = label ? label.textContent : ""; if(label) label.textContent = "Please wait…";
+    try {
+      try {
+        await signInWithPopup(auth, provider);   // preferred: no navigation away
+        hideSheet();                              // onAuthStateChanged takes over
+      } catch(e){
+        if(isPopupUnsupported(e)){
+          // Fall back to a full-page redirect (works inside pywebview's webview).
+          // This navigates away; getRedirectResult() below completes it on return.
+          await signInWithRedirect(auth, provider);
+          return;   // page is navigating; leave the button in its working state
+        }
+        throw e;
+      }
+    } catch(e){
+      setErr(friendly(e));
+    } finally {
+      busy(false); if(label) label.textContent = prev;
+    }
+  }
+  $("wacctGoogle").addEventListener("click", ()=>{
+    const p = new GoogleAuthProvider();
+    oauthSignIn(p, "wacctGoogle");
+  });
+  $("wacctApple").addEventListener("click", ()=>{
+    const p = new OAuthProvider("apple.com");
+    p.addScope("email"); p.addScope("name");
+    oauthSignIn(p, "wacctApple");
+  });
+  // Complete any pending redirect sign-in when the page reloads after coming back
+  // from the provider. Errors are surfaced in-sheet; success is handled by
+  // onAuthStateChanged. Silent no-op when there was no redirect in flight.
+  getRedirectResult(auth).then((res)=>{
+    if(res && res.user){ hideSheet(); }
+  }).catch((e)=>{ setErr(friendly(e)); });
 
   // ---- entitlement check: read licenses/{uid}, fall back to licenses/{lowercased email} ----
   // Returns "pro" / "free" when Firestore answers authoritatively, or null when
