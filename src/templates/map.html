@@ -3460,20 +3460,12 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   };
   function esc(s){return (s||'').replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   fetch('/wander/pogo').then(function(r){return r.json();}).then(function(d){
-    var h='<div class="wpogo-sec">Hotspots &mdash; tap to teleport</div>';
-    (d.hotspots||[]).forEach(function(s){
-      h+='<div class="wpogo-item"><div><div class="nm">'+esc(s.name)+'<span class="badge">'+esc(s.cat)+'</span></div><div class="ar">'+esc(s.area)+'</div></div>'+
-         '<button class="wpogo-btn" onclick="wpogoTeleport('+s.lat+','+s.lng+')">Teleport</button></div>';
-    });
-    h+='<div class="wpogo-sec">Premade routes &mdash; walk &amp; spin</div>';
-    (d.routes||[]).forEach(function(r){
-      h+='<div class="wpogo-item"><div><div class="nm">'+esc(r.name)+'</div><div class="ar">'+esc(r.area)+'</div></div>'+
-         '<button class="wpogo-btn walk" onclick=\'wpogoWalk('+JSON.stringify(r.points)+','+r.speed_mps+')\'>Walk</button></div>';
-    });
-    document.getElementById('wpogoBody').innerHTML=h;
-    // Cache the curated spots + apply per-game gating (only Pokémon GO shows them).
-    if(window.wpogoRegate) window.wpogoRegate(h);
-  }).catch(function(){document.getElementById('wpogoBody').innerHTML='<div style="padding:18px;color:#c00">Could not load PoGo data. Connect your device first.</div>';});
+    // Stash the raw packs; wpogoRegate (multi-game script) renders the right body per active game:
+    // Pokémon GO gets its category badges + Hub, other games get the shared "popular play areas"
+    // list + flavored extras + a live-community link.
+    window._wpogoData = d;
+    if(window.wpogoRegate) window.wpogoRegate();
+  }).catch(function(){document.getElementById('wpogoBody').innerHTML='<div style="padding:18px;color:#c00">Could not load spots. Connect your device first.</div>';});
 })();
 </script>
 
@@ -7116,7 +7108,6 @@ window.WanderOLC=(function(){
   var GAME_CAPS={'Pokémon GO':35,'Monster Hunter Now':16,'Pikmin Bloom':8,'Ingress':60};
   var CURATED='Pokémon GO';   // only Pokémon GO ships curated spots + live data
   var KEY='wanderPogoGame', GKEY='wanderSpeedGuard';
-  var spotsHtml=null;              // cache of the rendered curated body, for re-gating on switch
   try{ var saved=localStorage.getItem(KEY); if(saved){ sel.value=saved; } }catch(e){}
   try{ if(guard) guard.checked = localStorage.getItem(GKEY)==='1'; }catch(e){}
 
@@ -7125,19 +7116,40 @@ window.WanderOLC=(function(){
   window.wanderGameCapKmh=function(){ return GAME_CAPS[sel.value]||35; };
   window.wanderSpeedGuardOn=function(){ return !!(guard&&guard.checked); };
 
-  // Curated hotspots/routes are Pokémon GO community data, so they show only for Pokémon GO;
-  // other games get a "coming soon" note (the cooldown timer + speed guardrail still work). The
-  // fetch IIFE calls this once with the rendered spots HTML; game switches call it with no arg.
-  window.wpogoRegate=function(html){
-    if(html!=null) spotsHtml=html;
+  // Render the Games body from the raw packs (window._wpogoData, set by the fetch IIFE) for the
+  // ACTIVE game. The curated spots are a SHARED "popular play areas" list (same public spaces every
+  // location game is played in): Pokémon GO keeps its Spawn/Raid/Event category badges; other games
+  // show the shared list with a generic badge + a few flavored extras + a link to that game's live
+  // community tool (spawns/portals rotate, so we link out rather than ship stale pins).
+  window.wpogoRegate=function(){
     var b=document.getElementById('wpogoBody'); if(!b) return;
-    if(sel.value===CURATED){ if(spotsHtml!=null) b.innerHTML=spotsHtml; return; }
-    b.innerHTML='';
-    var d=document.createElement('div');
-    d.style.cssText='padding:16px 18px;color:#6b7a8d;font-size:13px;line-height:1.5';
-    d.textContent='Curated spots & live data for '+sel.value+' are coming soon. The cooldown timer '+
-      'and the optional speed guardrail work now — teleport anywhere and Wander paces your soft-ban.';
-    b.appendChild(d);
+    var d=window._wpogoData; if(!d) return;   // not loaded yet — the fetch will call us again
+    function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+    var isPoGo=(sel.value===CURATED);
+    var spots=[];
+    (d.hotspots||[]).forEach(function(s){
+      spots.push(isPoGo ? s : {name:s.name, area:s.area, cat:'Popular spot', lat:s.lat, lng:s.lng});
+    });
+    if(!isPoGo){ ((d.gameExtras&&d.gameExtras[sel.value])||[]).forEach(function(s){ spots.push(s); }); }
+    var h='<div class="wpogo-sec">'+(isPoGo?'Hotspots':'Popular play areas')+' &mdash; tap to teleport</div>';
+    spots.forEach(function(s){
+      h+='<div class="wpogo-item"><div><div class="nm">'+esc(s.name)+'<span class="badge">'+esc(s.cat)+'</span></div><div class="ar">'+esc(s.area)+'</div></div>'+
+         '<button class="wpogo-btn" onclick="wpogoTeleport('+s.lat+','+s.lng+')">Teleport</button></div>';
+    });
+    h+='<div class="wpogo-sec">Premade routes &mdash; walk &amp; spin</div>';
+    (d.routes||[]).forEach(function(r){
+      h+='<div class="wpogo-item"><div><div class="nm">'+esc(r.name)+'</div><div class="ar">'+esc(r.area)+'</div></div>'+
+         '<button class="wpogo-btn walk" onclick=\'wpogoWalk('+JSON.stringify(r.points)+','+r.speed_mps+')\'>Walk</button></div>';
+    });
+    if(!isPoGo){
+      var link=(d.communityLinks&&d.communityLinks[sel.value]);
+      if(link&&link.url){
+        h+='<div class="wpogo-sec">Live data</div>'+
+           '<div style="padding:4px 18px 16px;color:#6b7a8d;font-size:12.5px;line-height:1.5">Live spawns/portals for '+esc(sel.value)+' rotate — the community keeps the up-to-date spots:<br>'+
+           '<a href="'+esc(link.url)+'" target="_blank" rel="noopener" style="color:#185FA5;font-weight:600">'+esc(link.label)+' &rarr;</a></div>';
+      }
+    }
+    b.innerHTML=h;
   };
 
   function apply(){

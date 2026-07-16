@@ -135,7 +135,7 @@ APP_VERSION_NUMBER = "1.0.0"
 APP_VERSION_TYPE = "standard"
 # Single source of truth for the desktop app version used by the /update-check
 # route. Bump WANDER_VERSION here AND version in wander-site desktop.json each release.
-WANDER_VERSION = "1.13.0"
+WANDER_VERSION = "1.14.0"
 terminate_tunnel_thread = False
 terminate_location_thread = False
 location_threads = []
@@ -1128,6 +1128,34 @@ _move_thread = None
 _move_state = {"mode": None, "point": 0, "total": 0}
 _joystick = {"lat": None, "lng": None, "heading": 0.0, "speed_mps": 1.4, "moving": False}
 
+# Last coordinate actually pushed to the device (before any coarse shift). Lets a
+# teleport ease from where we currently are instead of snapping — see _glide_samples.
+_last_fix = {"lat": None, "lng": None}
+
+# ---- Smooth long-jump glide (anti impossible-jump) tuning ----
+# A teleport farther than SMOOTH_JUMP_THRESHOLD_M from the current spoofed point is
+# played as a fast, continuous great-circle glide instead of an instant hop, so apps
+# that flag an impossible-speed jump (dating apps, Life360) see a fast-but-continuous
+# move. Small jumps stay instant. Mirrors iOS JumpSmoothingDefaults / Android
+# SMOOTH_JUMP_* — glide aims for ~SMOOTH_JUMP_TARGET_SEC, capped at SMOOTH_JUMP_MAX_SEC.
+SMOOTH_JUMP_THRESHOLD_M = 2000.0
+SMOOTH_JUMP_TARGET_SEC = 3.0
+SMOOTH_JUMP_MAX_SEC = 4.0
+SMOOTH_JUMP_TICK_SEC = 0.25     # gap between reported glide fixes (matches pump min sleep)
+
+# ---- Coarse (approximate) privacy location ----
+# When on, the REPORTED coordinate is shifted by a STABLE per-session offset so the
+# shared position lands in a believable ~3-5 km-off neighbourhood rather than the exact
+# spot. The offset is generated ONCE per process (not per tick) — distinct from the
+# per-tick GPS jitter — so the whole track shifts as a block. Mirrors Android coarseOffset.
+COARSE_MIN_OFFSET_M = 3000.0
+COARSE_MAX_OFFSET_M = 5000.0
+_coarse = {"on": False}
+_coarse_offset = {
+    "bearing_deg": random.uniform(0.0, 360.0),
+    "distance_m": random.uniform(COARSE_MIN_OFFSET_M, COARSE_MAX_OFFSET_M),
+}
+
 
 def _haversine_m(lat1, lon1, lat2, lon2):
     R = 6371000.0
@@ -1180,6 +1208,39 @@ def _build_path(points, speed_mps, interval=1.0, loop="once"):
             samples.append((a[0] + (b[0] - a[0]) * s / steps,
                             a[1] + (b[1] - a[1]) * s / steps))
     return samples
+
+
+def _glide_samples(a, b, dist_m):
+    """Build a short, fast great-circle glide from a=(lat,lng) to b=(lat,lng) for the
+    smooth long-jump path. Returns (lat, lng, dwell) tuples the pump can play, timed so
+    the WHOLE glide finishes in ~SMOOTH_JUMP_TARGET_SEC (capped at SMOOTH_JUMP_MAX_SEC)
+    regardless of distance — a longer jump just means longer strides per tick, not more
+    ticks (so a cross-country jump still lands in a few seconds and never floods the pump
+    with thousands of points). The first reported point sits one stride out from `a` so
+    the move is continuous with where we already are, and the last lands exactly on `b`.
+    Mirrors iOS buildJumpGlideSamples / Android glideTo (speed-capped, bounded ticks)."""
+    duration = min(SMOOTH_JUMP_TARGET_SEC, SMOOTH_JUMP_MAX_SEC)
+    steps = max(2, int(round(duration / SMOOTH_JUMP_TICK_SEC)))   # bounded, distance-independent
+    dwell = duration / steps
+    brng = _bearing(a[0], a[1], b[0], b[1])
+    out = []
+    for s in range(1, steps + 1):
+        if s == steps:
+            lat, lng = b[0], b[1]          # land exactly on target (no rounding drift)
+        else:
+            lat, lng = _offset(a[0], a[1], brng, dist_m * s / steps)
+        out.append((lat, lng, dwell))
+    return out
+
+
+def _apply_coarse(lat, lng):
+    """If coarse (approximate) privacy location is on, shift the REPORTED coordinate by
+    the STABLE per-session offset (~3-5 km) so it lands in a nearby neighbourhood rather
+    than the exact spot. Distinct from _jitter (per-tick): this offset is fixed for the
+    process, so the whole track shifts as a block. Mirrors Android _apply coarse."""
+    if not _coarse["on"]:
+        return (lat, lng)
+    return _offset(lat, lng, _coarse_offset["bearing_deg"], _coarse_offset["distance_m"])
 
 
 def _bearing(lat1, lon1, lat2, lon2):
@@ -1244,6 +1305,95 @@ def _build_realistic_path(points, speed_mps, interval=1.0, loop="once"):
     return samples
 
 
+# ---- Realistic-ETA route pacing ---------------------------------------------
+# The flat-speed path (_build_path) and the turn-aware path (_build_realistic_path)
+# both pace movement off a single cruising speed. This helper instead paces each
+# leg by the REAL routing ETA for that leg — the same durations OSM's OSRM server
+# returns for turn-by-turn directions — so a leg full of turns / slow roads plays
+# slower than an open motorway leg, approximating iOS MKDirections-ETA pacing.
+# We reuse OSM's public OSRM (routing.openstreetmap.de) — the exact host the
+# in-page Leaflet routing machine already hits — and fall back to the flat-speed
+# path if the network / service is unavailable so a route ALWAYS starts.
+
+# Map the client "travel by" mode to an OSRM routed-* profile on OSM's server.
+_OSRM_PROFILE = {
+    "drive": "routed-car", "car": "routed-car", "transit": "routed-car",
+    "walk": "routed-foot", "foot": "routed-foot",
+    "cycle": "routed-bike", "bike": "routed-bike",
+}
+
+
+def _osrm_legs(points, profile="routed-car"):
+    """Ask OSM's OSRM for the geometry + per-step timing along `points` and return a
+    list of (lat, lng, dwell) samples paced by the real ETA. Returns None on any
+    failure so the caller can fall back to the flat-speed path.
+
+    We request `annotations` so each pair of returned geometry vertices carries the
+    OSRM-estimated duration for that hop; the dwell we emit for a vertex is that
+    hop's real duration. Turns and slow segments therefore linger; fast straights
+    fly — the same shape MKDirections ETA pacing produces on iOS."""
+    if len(points) < 2:
+        return None
+    coords = ";".join("%f,%f" % (p[1], p[0]) for p in points)   # OSRM wants lng,lat
+    base = "https://routing.openstreetmap.de/%s/route/v1/driving/" % profile
+    url = base + coords
+    params = {
+        "overview": "full", "geometries": "geojson",
+        "annotations": "duration", "steps": "false",
+    }
+    try:
+        r = requests.get(url, params=params, timeout=15,
+                         headers={"User-Agent": "Wander-Desktop/1.0"})
+        if r.status_code != 200:
+            return None
+        js = r.json()
+    except Exception as e:
+        logger.error(f"osrm legs error: {e}")
+        return None
+    routes = js.get("routes") or []
+    if not routes:
+        return None
+    route = routes[0]
+    geom = ((route.get("geometry") or {}).get("coordinates")) or []   # [[lng,lat],...]
+    if len(geom) < 2:
+        return None
+    # Per-hop durations (len == len(geom)-1) live under legs[].annotation.duration.
+    durs = []
+    for leg in route.get("legs") or []:
+        ann = (leg.get("annotation") or {}).get("duration") or []
+        durs.extend(ann)
+    verts = [(c[1], c[0]) for c in geom]                              # -> (lat,lng)
+    samples = []
+    for i in range(1, len(verts)):
+        lat, lng = verts[i]
+        # OSRM duration for the hop ending at this vertex, if we have it; else derive
+        # a sane dwell from distance so pacing degrades gracefully rather than snapping.
+        if i - 1 < len(durs) and durs[i - 1] is not None:
+            dwell = float(durs[i - 1])
+        else:
+            d = _haversine_m(verts[i - 1][0], verts[i - 1][1], lat, lng)
+            dwell = d / 12.0                                          # ~43 km/h fallback
+        dwell = max(0.15, min(30.0, dwell))                          # keep the pump sane
+        samples.append((lat, lng, dwell))
+    return samples or None
+
+
+def _build_eta_path(points, mode="drive", loop="once"):
+    """Realistic-ETA path: pace each leg by OSRM's real ETA (see _osrm_legs). Returns
+    (samples, ok) — ok is False when OSRM was unavailable and the caller should fall
+    back so a route still starts."""
+    seq = list(points)
+    if loop == "round" and len(seq) > 1:
+        seq = seq + list(reversed(seq[:-1]))
+    if len(seq) < 2:
+        return [], True
+    profile = _OSRM_PROFILE.get(str(mode or "drive").lower(), "routed-car")
+    samples = _osrm_legs(seq, profile)
+    if samples is None:
+        return [], False
+    return samples, True
+
+
 def _jitter(lat, lng, on, radius_m=None):
     """Nudge the point by a small random offset so the fix looks like a real GPS
     reading. `radius_m` is the max offset in metres; None keeps the legacy ~4.4 m
@@ -1283,8 +1433,14 @@ async def _pump(get_next):
                     break
                 lat, lng = nxt[0], nxt[1]
                 sleep_s = nxt[2] if len(nxt) > 2 else 1.0
+                # Remember the true (pre-coarse) point so a later teleport can glide
+                # from here instead of snapping — see _glide_samples / wander_teleport.
+                _last_fix["lat"], _last_fix["lng"] = lat, lng
+                # Coarse privacy shift is applied to the REPORTED coordinate only; the
+                # canonical fix stored above (and the movement math) stay exact.
+                rlat, rlng = _apply_coarse(lat, lng)
                 try:
-                    sim.set(float(lat), float(lng))
+                    sim.set(float(rlat), float(rlng))
                 except Exception as e:
                     logger.error(f"sim.set error: {e}")
                     break
@@ -1466,11 +1622,32 @@ def wander_teleport():
     lat, lng = float(d['lat']), float(d['lng'])
     fluc = bool(d.get('fluctuate'))
     jm = d.get('jitter_m')
+    # Smooth long-jump glide (anti impossible-jump): default on; the client can opt out
+    # by sending glide:false. Only a LARGE move from the current fix eases; small jumps
+    # (and the very first teleport, when we have no prior fix) stay instant.
+    glide = d.get('glide', True)
+    here = (_last_fix["lat"], _last_fix["lng"])
+    glide_samples = []
+    if glide and here[0] is not None:
+        dist = _haversine_m(here[0], here[1], lat, lng)
+        if dist > SMOOTH_JUMP_THRESHOLD_M:
+            glide_samples = _glide_samples(here, (lat, lng), dist)
 
-    def nxt():
-        return _jitter(lat, lng, fluc, jm)   # hold the point (re-jitter if enabled)
+    if glide_samples:
+        idx = {"i": 0}
+
+        def nxt():
+            i = idx["i"]
+            if i < len(glide_samples):
+                idx["i"] = i + 1
+                s = glide_samples[i]
+                return (s[0], s[1], s[2])        # ease along the great circle
+            return _jitter(lat, lng, fluc, jm)   # then hold the target (re-jitter if on)
+    else:
+        def nxt():
+            return _jitter(lat, lng, fluc, jm)   # hold the point (re-jitter if enabled)
     _start_stream(nxt, "teleport")
-    return jsonify({"ok": True, "lat": lat, "lng": lng})
+    return jsonify({"ok": True, "lat": lat, "lng": lng, "glide": bool(glide_samples)})
 
 
 @app.route('/wander/route', methods=['POST'])
@@ -1480,10 +1657,25 @@ def wander_route():
     speed = float(d.get('speed_mps', 1.4))
     loop = d.get('loop', 'once')              # once | round | loop
     realistic = bool(d.get('realistic'))
+    # Speed mode: 'eta' paces each leg by the real OSRM routing ETA (slows for
+    # turns/slow roads) instead of a flat cruising speed. Anything else keeps the
+    # legacy flat-speed / turn-aware behaviour, so existing callers are unchanged.
+    pace = str(d.get('pace') or '').lower()
+    mode = d.get('mode') or 'drive'
     fluc = bool(d.get('fluctuate') or realistic)
     jm = d.get('jitter_m')
     seg_loop = 'round' if loop == 'round' else 'once'
-    if realistic:
+    paced = False
+    if pace == 'eta':
+        eta_samples, ok = _build_eta_path(pts, mode, seg_loop)
+        if ok and eta_samples:
+            samples = eta_samples
+            paced = True
+        elif realistic:
+            samples = _build_realistic_path(pts, speed, 1.0, seg_loop)
+        else:
+            samples = _build_path(pts, speed, 1.0, seg_loop)
+    elif realistic:
         # Turn-aware samples carry their own dwell time (lat, lng, dwell).
         samples = _build_realistic_path(pts, speed, 1.0, seg_loop)
     else:
@@ -1510,7 +1702,8 @@ def wander_route():
             return (j[0], j[1], smp[2])
         return j
     _start_stream(nxt, "route")
-    return jsonify({"ok": True, "samples": len(samples), "realistic": realistic})
+    return jsonify({"ok": True, "samples": len(samples),
+                    "realistic": realistic, "paced": paced})
 
 
 @app.route('/wander/jump', methods=['POST'])
@@ -1579,6 +1772,17 @@ def wander_joystick_dir():
 def wander_cooldown():
     km = float(request.args.get('km', 0))
     return jsonify({"km": km, "minutes": pogo_cooldown_minutes(km)})
+
+
+@app.route('/wander/coarse', methods=['POST'])
+def wander_coarse():
+    """Toggle coarse (approximate) privacy location. The offset itself is stable for the
+    session (chosen once at startup); this only flips whether it is applied. The client
+    persists the toggle and re-sends it on load."""
+    d = request.get_json(force=True) or {}
+    _coarse["on"] = bool(d.get('on'))
+    return jsonify({"ok": True, "on": _coarse["on"],
+                    "offset_m": round(_coarse_offset["distance_m"])})
 
 
 def _parse_maxspeed(raw):
