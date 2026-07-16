@@ -339,6 +339,11 @@ body.dark-mode .modal-footer button {
     </div>
     <div class="wfav-list" id="wfavList"></div>
     <div class="wfav-empty" id="wfavEmpty">No saved places yet. Search or click the map, then Save.</div>
+    <!-- Cross-device sync: opt-in, Pro-only, OFF by default. Hidden until the row is enabled by the account layer. -->
+    <div class="wfav-syncrow" id="wfavSyncRow" style="display:none">
+      <label class="wfav-sync-lbl"><input type="checkbox" id="wfavSyncToggle"> Sync places across my devices <span class="wfav-pro">PRO</span></label>
+      <div class="wfav-sync-note" id="wfavSyncNote">Mirror favorites to your Wander account so they follow you to iPhone, Android &amp; other machines.</div>
+    </div>
   </div>
 
   <!-- ===== Appearance / dark mode toggle (scoped: wappr-) — free ===== -->
@@ -363,8 +368,7 @@ body.dark-mode .modal-footer button {
     <input type="file" id="wbakFile" accept="application/json,.json" style="display:none">
   </div>
 
-  <!-- ===== Street View teleport (scoped: wsv-) — only rendered when a Maps key is configured ===== -->
-  {% if google_maps_key %}
+  <!-- ===== Street View teleport (scoped: wsv-) — key fetched from the Worker (Pro + quota) ===== -->
   <style>
     #wtheme-streetview .wsv-toggle{float:right;font-size:11px;padding:2px 9px;border:none;border-radius:7px;background:#185FA5;color:#fff;cursor:pointer}
     #wsvPano{width:100%;height:200px;border-radius:10px;overflow:hidden;background:#0f1b2a;margin:6px 0;display:none}
@@ -384,7 +388,6 @@ body.dark-mode .modal-footer button {
       <button type="button" id="wsvGetPro" style="display:none">✨ Unlock Street View with Wander Pro</button>
     </div>
   </div>
-  {% endif %}
 
   <!-- ===== Local time & weather at the spoofed spot (scoped: wtw-) — free, no API key ===== -->
   <style>
@@ -495,6 +498,45 @@ body.dark-mode .modal-footer button {
     <div class="wpg-src">Data: LeekDuck</div>
   </div>
 
+  <!-- ===== PoGo Hub — read-only reference of current PoGo community data (LeekDuck via Worker). 5 tabs, localStorage-cached, offline-safe ===== -->
+  <style>
+    #wtheme-pogohub .wpgh-tabs{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+    #wtheme-pogohub .wpgh-tab{flex:1 1 auto;min-width:52px;padding:6px 4px;border:1px solid #dbe3ec;border-radius:8px;background:#fff;font-size:11.5px;cursor:pointer;color:#6b7a8c;text-align:center}
+    #wtheme-pogohub .wpgh-tab.on{background:#185FA5;color:#fff;border-color:#185FA5}
+    #wtheme-pogohub .wpgh-off{display:none;font-size:11px;color:#8a6d00;background:#fff7e6;border:1px solid #f0e2c0;border-radius:8px;padding:5px 8px;margin-bottom:7px}
+    #wtheme-pogohub .wpgh-off.on{display:block}
+    #wtheme-pogohub .wpgh-body{font-size:12.5px;max-height:260px;overflow:auto}
+    #wtheme-pogohub .wpgh-grp{font-weight:700;color:#0f2438;margin:9px 0 3px;font-size:12px}
+    #wtheme-pogohub .wpgh-row{padding:4px 0;border-top:1px solid #f0f3f7;display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap}
+    #wtheme-pogohub .wpgh-nm{font-weight:600;color:#0c1a2b}
+    #wtheme-pogohub .wpgh-meta{color:#9aa7b4;font-size:11.5px}
+    #wtheme-pogohub .wpgh-cp{color:#6b7a8d;font-size:11px}
+    #wtheme-pogohub .wpgh-shiny{color:#f0a500}
+    #wtheme-pogohub .wpgh-task{color:#33475b}
+    #wtheme-pogohub .wpgh-arrow{color:#9aa7b4;margin:0 3px}
+    #wtheme-pogohub .wpgh-src{font-size:10.5px;color:#9db4cc;margin-top:7px;text-align:right}
+    #wtheme-pogohub .wpgh-empty{color:#6b7a8c;padding:6px 0}
+    body.wander-dark #wtheme-pogohub .wpgh-tab{background:#1b2736;border-color:#2c3a4d;color:#9fb0c2}
+    body.wander-dark #wtheme-pogohub .wpgh-tab.on{background:#185FA5;color:#fff}
+    body.wander-dark #wtheme-pogohub .wpgh-grp,
+    body.wander-dark #wtheme-pogohub .wpgh-nm{color:#e6eef7}
+    body.wander-dark #wtheme-pogohub .wpgh-row{border-top-color:#25303f}
+    body.wander-dark #wtheme-pogohub .wpgh-task{color:#c4d2e0}
+  </style>
+  <div class="mb-3" id="wtheme-pogohub">
+    <div class="wtheme-card-title">PoGo Hub</div>
+    <div class="wpgh-tabs">
+      <button type="button" class="wpgh-tab on" data-t="raids">Raids</button>
+      <button type="button" class="wpgh-tab" data-t="eggs">Eggs</button>
+      <button type="button" class="wpgh-tab" data-t="events">Events</button>
+      <button type="button" class="wpgh-tab" data-t="research">Research</button>
+      <button type="button" class="wpgh-tab" data-t="rocket">Rocket</button>
+    </div>
+    <div id="wpghOff" class="wpgh-off">Offline &mdash; showing last saved data.</div>
+    <div id="wpghBody" class="wpgh-body">Loading&hellip;</div>
+    <div class="wpgh-src">Read-only community data &middot; LeekDuck</div>
+  </div>
+
   <!-- ===== 3D globe (free) — spin + tap to teleport ===== -->
   <div class="mb-3" id="wtheme-globe">
     <div class="wtheme-card-title">3D globe</div>
@@ -530,6 +572,36 @@ body.dark-mode .modal-footer button {
     <button type="button" id="witStart" class="wit-start">&#9654; Start itinerary</button>
     <button type="button" id="witStop" class="wit-stop">&#9632; Stop</button>
     <div class="wit-msg" id="witMsg">Set a pin, pick teleport/route + minutes, Add. Runs in order while Wander stays open.</div>
+  </div>
+
+  <!-- ===== Scheduling (Pro) — be somewhere during set hours; reuses the itinerary/loop
+       machinery (/wander/teleport, /wander/route, /stop_location). Fires ONLY while the
+       app is open — no OS cron — which the UI states plainly. ===== -->
+  <style>
+    #wtheme-sched .wsch-row{display:flex;gap:6px;margin-bottom:6px;align-items:center}
+    #wtheme-sched label.wsch-lbl{font-size:11px;color:#6b7a8c;min-width:34px}
+    #wtheme-sched select,#wtheme-sched input{padding:6px 8px;border:1px solid #dbe3ec;border-radius:8px;font-size:12.5px}
+    #wtheme-sched select{flex:1}
+    #wtheme-sched input[type="time"]{flex:1}
+    #wtheme-sched .wsch-pro{display:none;font-size:9.5px;font-weight:800;letter-spacing:.4px;vertical-align:middle;padding:1px 6px;border-radius:6px;background:linear-gradient(135deg,#f0a500,#e07b00);color:#fff}
+    body:not(.wander-pro) #wtheme-sched .wsch-pro{display:inline-block}
+    #wtheme-sched .wsch-caveat{font-size:11px;line-height:1.4;color:#8a5a00;background:#fff7e6;border:1px solid #ffe0a3;border-radius:8px;padding:7px 9px;margin:6px 0}
+    #wtheme-sched .wsch-arm{width:100%;padding:8px;border:none;border-radius:9px;background:#1a9c54;color:#fff;font-weight:700;cursor:pointer}
+    #wtheme-sched .wsch-cancel{width:100%;padding:8px;border:none;border-radius:9px;background:#d33a2c;color:#fff;font-weight:700;cursor:pointer;display:none}
+    #wtheme-sched .wsch-msg{font-size:11.5px;color:#6b7a8c;margin-top:6px;line-height:1.4}
+  </style>
+  <div class="mb-3" id="wtheme-sched">
+    <div class="wtheme-card-title">Scheduling <span class="wsch-pro">PRO</span></div>
+    <div style="font-size:12px;color:#6b7a8c;margin-bottom:6px;line-height:1.4">Auto-start a saved spot or loop at a set time and auto-stop later.</div>
+    <div class="wsch-row"><label class="wsch-lbl">Spoof</label>
+      <select id="wschTarget" title="What to run during the window"></select>
+    </div>
+    <div class="wsch-row"><label class="wsch-lbl">Start</label><input id="wschStart" type="time" title="Auto-start time">
+      <label class="wsch-lbl">End</label><input id="wschEnd" type="time" title="Auto-stop time"></div>
+    <div class="wsch-caveat">&#9888;&#65039; Wander must stay <b>open</b> for this to fire — there is no background service or OS cron. If you quit the app, the schedule won't run.</div>
+    <button type="button" id="wschArm" class="wsch-arm">&#9200; Arm schedule</button>
+    <button type="button" id="wschCancel" class="wsch-cancel">&#9632; Cancel schedule</button>
+    <div class="wsch-msg" id="wschMsg">Pick a saved spot or loop, set a start &amp; end time, then Arm.</div>
   </div>
 
   <!-- ===== Multi-device (beta) — hold a different location on several phones at once ===== -->
@@ -779,33 +851,6 @@ L.leafletMenu = function(a, b) {
     console.log("App Type: ", appVersionType);
     console.log("Platform: ", selectedDevicePlatform);
 
-      // Record app_visit when the page loads
-      //document.addEventListener('DOMContentLoaded', () => recordEvent('beta_visit'));
-
-      async function recordEvent(eventName) {
-        const apiUrl = 'https://api.wander.me/';
-
-        try {
-          const response = await fetch(apiUrl + selectedDevicePlatform, {
-            mode: 'no-cors',
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              path: window.location.pathname,
-              [eventName]: true,
-            }),
-          });
-
-          if (!response.ok) {
-            console.error('Failed to record event:', response.status, response.statusText);
-          }
-        } catch (error) {
-          console.error('Error recording event:', error.message);
-        }
-      }
-
     // Function to toggle Dark Mode
     function toggleDarkMode() {
       // Get the Dark Mode switch element
@@ -966,10 +1011,11 @@ async function initializeMap(userLocale) {
     // Add default tile layer
     stadiaTileLayer.addTo(map);
 
-    // Protomaps vector basemap (PMTiles) — license-clean + offline-capable. Source is config-driven:
-    // the Protomaps demo planet for now; set window.WANDER_PMTILES_URL to your Cloudflare R2 URL once
-    // the planet .pmtiles is hosted there (see docs/PMTILES-R2.md).
-    var PMTILES_URL = (window.WANDER_PMTILES_URL || 'https://demo-bucket.protomaps.com/v4.pmtiles');
+    // Protomaps vector basemap (PMTiles) — license-clean + offline-capable. Served from our OWN
+    // Cloudflare R2 planet (127 GB, public + CORS), not the shared Protomaps demo bucket.
+    // window.WANDER_PMTILES_URL overrides if set. (r2.dev works now; for production scale swap to a
+    // custom domain like tiles.wanderspoofer.com — r2.dev is Cloudflare-rate-limited.)
+    var PMTILES_URL = (window.WANDER_PMTILES_URL || 'https://pub-900d494275c249a7a4f76af8caf5a3ed.r2.dev/planet.pmtiles');
     var protomapsLayer = null;
     try {
         protomapsLayer = protomapsL.leafletLayer({ url: PMTILES_URL, theme: 'light',
@@ -1620,47 +1666,6 @@ var TimeToNextPointControl = L.Control.extend({
 // Create and add the custom control to the map with the specified position
 var timeToNextPointControl = new TimeToNextPointControl({ position: 'bottomleft' }); // Set position to bottom left
 timeToNextPointControl.addTo(map);
-
-
-// Function to send GPX file to the backend
-function sendGPXToBackend() {
-    // Get the selected file from the FileLayer control
-    var selectedFile = document.getElementById('gpxFileInput').files[0];
-    var velocity = document.getElementById('velocity').value; // Assuming you have an input field with ID 'velocity'
-
-
-    if (selectedFile) {
-        // Create a FormData object to send the file
-        var formData = new FormData();
-        formData.append('gpxFile', selectedFile);
-        formData.append('velocity', velocity);
-
-        // Send the FormData to the backend using fetch or another AJAX method
-        fetch('/upload_gpx', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.text();
-        })
-        .then(data => {
-            console.log('GPX file uploaded successfully:', data);
-        })
-        .catch(error => {
-            console.error('Error uploading GPX file:', error);
-        });
-    } else {
-        console.error('No GPX file selected.');
-    }
-}
-
-    // Assuming your input field has an id of 'coordinates'
-    var inputField = document.getElementById('coordinates');
-}
-
 
 
 // Function to create a marker with all necessary event listeners
@@ -2958,6 +2963,8 @@ function continueAfterDeveloperModeRequired() {
           <option value="10">Loose (10 m)</option>
           <option value="25">Wide (25 m)</option>
         </select></div>
+      <label class="wmode-chk"><input type="checkbox" id="wmSmoothJump" checked> Smooth long jumps (anti impossible-jump)</label>
+      <label class="wmode-chk"><input type="checkbox" id="wmCoarseLoc"> Approximate location (~3–5 km privacy offset)</label>
       <button class="wmode-btn" id="wmTelGo">Teleport here</button>
       <div class="wmode-msg" id="wmTelMsg"></div>
     </div>
@@ -2983,7 +2990,7 @@ function continueAfterDeveloperModeRequired() {
         <input class="wmode-in" id="wmTwoLL" placeholder="click map or type"></div>
       <label class="wmode-lbl">Speed</label>
       <div class="wmode-speed" data-speed="two">
-        <button data-mps="1.4">Walk</button><button data-mps="5" class="on">Bike</button><button data-mps="13">Drive</button>
+        <button data-mps="1.4">Walk</button><button data-mps="5" class="on">Bike</button><button data-mps="13">Drive</button><button data-pace="eta" title="Pace each leg by its real routing ETA — slows for turns and slow roads like MKDirections">&#9201; Realistic ETA</button>
       </div>
       <button class="wmode-btn sm" id="wmTwoOsm" style="margin-bottom:9px" title="Set speed to the posted road speed limit from OpenStreetMap">&#128739; Use road speed limit (OSM)</button>
       <label class="wmode-chk"><input type="checkbox" id="wmTwoRealistic" checked> Realistic movement (slow into turns)</label>
@@ -3013,7 +3020,7 @@ function continueAfterDeveloperModeRequired() {
       </select>
       <label class="wmode-lbl">Speed</label>
       <div class="wmode-speed" data-speed="multi">
-        <button data-mps="1.4" class="on">Walk</button><button data-mps="5">Bike</button><button data-mps="13">Drive</button>
+        <button data-mps="1.4" class="on">Walk</button><button data-mps="5">Bike</button><button data-mps="13">Drive</button><button data-pace="eta" title="Pace each leg by its real routing ETA — slows for turns and slow roads like MKDirections">&#9201; Realistic ETA</button>
       </div>
       <button class="wmode-btn sm" id="wmMultiOsm" style="margin-bottom:9px" title="Set speed to the posted road speed limit from OpenStreetMap">&#128739; Use road speed limit (OSM)</button>
       <div class="wmode-row"><label class="wmode-lbl">Loop</label>
@@ -3491,9 +3498,10 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   .wmode-li{display:flex;align-items:center;justify-content:space-between;padding:5px 9px;border-bottom:1px solid #f2f4f7;font-size:12px}
   .wmode-li:last-child{border-bottom:none}
   .wmode-li button{border:none;background:transparent;color:#e63946;cursor:pointer;font-size:15px;line-height:1;padding:0 2px}
-  .wmode-speed{display:flex;gap:5px;margin-bottom:9px}
-  .wmode-speed button{flex:1;border:1px solid #d5d9e0;border-radius:8px;background:#fff;padding:7px 2px;
-    font:600 12px -apple-system,Helvetica,Arial;color:#374151;cursor:pointer}
+  .wmode-speed{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:9px}
+  .wmode-speed button{flex:1 1 auto;border:1px solid #d5d9e0;border-radius:8px;background:#fff;padding:7px 2px;
+    font:600 12px -apple-system,Helvetica,Arial;color:#374151;cursor:pointer;white-space:nowrap}
+  .wmode-speed button[data-pace="eta"]{flex:1 1 100%}
   .wmode-speed button.on{background:#2f6bff;color:#fff;border-color:#2f6bff}
   .wmode-dpad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:9px;max-width:170px;margin-left:auto;margin-right:auto}
   .wmode-dpad button{border:1px solid #d5d9e0;border-radius:9px;background:#f1f3f6;height:44px;font-size:18px;
@@ -3626,6 +3634,12 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   .wfav-editbox .wfav-editactions{display:flex;gap:6px}
   .wfav-editbox .wfav-save{background:var(--w-brand);color:#fff;border:none;border-radius:8px;padding:6px 12px;font:600 12px var(--w-font);cursor:pointer}
   .wfav-editbox .wfav-cancel{background:transparent;color:var(--w-muted);border:none;border-radius:8px;padding:6px 12px;font:600 12px var(--w-font);cursor:pointer}
+  /* favorites: cross-device sync toggle (opt-in, Pro) */
+  .wfav-syncrow{margin-top:10px;padding-top:9px;border-top:1px solid var(--w-line)}
+  .wfav-sync-lbl{display:flex;align-items:center;gap:7px;font:600 12px var(--w-font);color:var(--w-ink);cursor:pointer}
+  .wfav-sync-lbl input{margin:0;cursor:pointer}
+  .wfav-pro{font:700 9px var(--w-font);letter-spacing:.05em;color:#fff;background:var(--w-brand);border-radius:5px;padding:1px 5px}
+  .wfav-sync-note{font:11px var(--w-font);color:var(--w-muted);line-height:1.4;margin-top:5px}
 
   /* ---- Appearance card (scoped: wappr-) ---- */
   .wappr-seg{display:flex;gap:4px;background:var(--w-brand-tint);border-radius:var(--w-radius-sm);padding:3px}
@@ -3739,6 +3753,9 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   window.wanderGetMultiPts = function(){ return (multiPts||[]).slice(); };
   var joyStarted=false;
   var speeds={two:5, multi:1.4, joy:1.4};
+  // Per-mode speed *pacing*: 'flat' uses the numeric speed above; 'eta' tells the
+  // server to pace each leg by its real routing ETA (Realistic ETA button).
+  var pacing={two:'flat', multi:'flat'};
 
   var MODE_TITLES={teleport:'Teleport',jump:'Jump-Teleport',two:'Two-Spot Route',multi:'Multi-Spot Route',joy:'Joystick',pogo:'Pokémon GO Mode'};
   var PICK_IN={teleport:'wmTelLL',jump:'wmJumpLL',two:'wmTwoLL',multi:'wmMultiLL'}; // where a click fills
@@ -3784,7 +3801,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   window.wanderSetPro=function(on){ window.WANDER_PRO=!!on; document.body.classList.toggle('wander-pro',!!on); };
 
   // ---- Trial gating (free accounts; ledger lives server-side, clients only ask) ----
-  var TRIAL_PITCH='Create a free Wander account to start your trial — 5 teleports, 30 min of joystick, 3 routes. Pro unlocks everything.';
+  var TRIAL_PITCH='Create a free Wander account to start your trial — 1 free teleport every day, plus 15 minutes of joystick and 3 routes every month. Pro unlocks everything.';
   var PRICING_URL='https://wanderspoofer.com/pricing/';
   function trialSignedIn(){ return !!(window.wanderAuthState && window.wanderAuthState.signedIn); }
   function askSignIn(){
@@ -3876,13 +3893,21 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   }
 
   // ---- speed presets ----
+  // Each group has flat-speed buttons (data-mps) plus an optional "Realistic ETA"
+  // button (data-pace="eta"). Selecting ETA paces legs by the real routing ETA;
+  // selecting a numeric speed reverts that mode to flat pacing.
   qsa('.wmode-speed').forEach(function(grp){
     var key=grp.getAttribute('data-speed');
     qsa('button',grp).forEach(function(b){
       b.addEventListener('click',function(){
         qsa('button',grp).forEach(function(x){x.classList.remove('on');});
         b.classList.add('on');
-        speeds[key]=parseFloat(b.getAttribute('data-mps'));
+        if(b.getAttribute('data-pace')==='eta'){
+          if(pacing[key]!==undefined) pacing[key]='eta';
+        } else {
+          if(pacing[key]!==undefined) pacing[key]='flat';
+          speeds[key]=parseFloat(b.getAttribute('data-mps'));
+        }
       });
     });
   });
@@ -3900,6 +3925,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
         btn.disabled=false; btn.textContent=old;
         if(!d||!d.ok||!d.speed_mps){ msg(msgEl,(d&&d.error)||'No speed limit found nearby.',false); return; }
         speeds[key]=d.speed_mps;
+        if(pacing[key]!==undefined) pacing[key]='flat';   // road speed is a flat speed
         // Clear preset button highlight — we're now on a custom (road) speed.
         var grp=document.querySelector('.wmode-speed[data-speed="'+key+'"]');
         if(grp) qsa('button',grp).forEach(function(x){x.classList.remove('on');});
@@ -4040,6 +4066,41 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     return isNaN(v)?undefined:v;
   }
 
+  // ---- Smooth long jumps (anti impossible-jump) — persisted toggle, default ON ----
+  // A big teleport (>~2 km) eases along the great circle over a few seconds instead of
+  // snapping, so apps that flag an impossible-speed jump see a fast, continuous move.
+  // Small jumps stay instant. Mirrors iOS/Android smooth-jump. The server decides per
+  // teleport whether to glide; we just tell it whether the feature is enabled.
+  var SMOOTH_KEY='wanderSmoothJump';
+  (function(){
+    var cb=$('wmSmoothJump'); if(!cb) return;
+    try{ var s=localStorage.getItem(SMOOTH_KEY); if(s!==null) cb.checked=(s==='1'); }catch(e){}
+    cb.addEventListener('change',function(){
+      try{ localStorage.setItem(SMOOTH_KEY, cb.checked?'1':'0'); }catch(e){}
+    });
+  })();
+  function glideOn(){ var cb=$('wmSmoothJump'); return cb?cb.checked:true; }
+
+  // ---- Approximate (coarse) privacy location — persisted toggle, default OFF ----
+  // When on, the reported fix is shifted by a STABLE per-session offset (~3–5 km, chosen
+  // once by the server) so the shared position is a believable nearby neighbourhood
+  // rather than the exact spot. Distinct from the per-tick jitter above. Mirrors
+  // iOS/Android approximate-location. Server holds the offset; we sync the on/off state.
+  var COARSE_KEY='wanderCoarseLoc';
+  function coarseSync(on){
+    post('/wander/coarse',{on:!!on}).catch(function(){});
+  }
+  (function(){
+    var cb=$('wmCoarseLoc'); if(!cb) return;
+    try{ var s=localStorage.getItem(COARSE_KEY); if(s!==null) cb.checked=(s==='1'); }catch(e){}
+    coarseSync(cb.checked);                 // re-assert saved state on load
+    cb.addEventListener('change',function(){
+      try{ localStorage.setItem(COARSE_KEY, cb.checked?'1':'0'); }catch(e){}
+      coarseSync(cb.checked);
+      if(window.wanderToast) window.wanderToast(cb.checked?'📍 Approximate location on (~3–5 km off)':'📍 Approximate location off');
+    });
+  })();
+
   // ---- Teleport ----
   $('wmTelGo').addEventListener('click',function(){
     var v=resolve('wmTelLL');
@@ -4047,7 +4108,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     if(!connected()){ notConnected($('wmTelMsg')); return; }
     trialGate('teleport',null,'teleport',$('wmTelMsg')).then(function(ok){
       if(!ok) return;
-      post('/wander/teleport',{lat:v[0],lng:v[1],fluctuate:$('wmTelFluc').checked,jitter_m:jitterM()})
+      post('/wander/teleport',{lat:v[0],lng:v[1],fluctuate:$('wmTelFluc').checked,jitter_m:jitterM(),glide:glideOn()})
         .then(function(r){ if(!r.ok){ notConnected($('wmTelMsg')); return; } msg($('wmTelMsg'),'Teleported.',true); })
         .catch(function(){ msg($('wmTelMsg'),'Network error.',false); });
     });
@@ -4059,7 +4120,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     if(!connected()){ if(window.wanderToast)window.wanderToast('Connect your device first'); return Promise.resolve(false); }
     return trialGate('teleport',null,'teleport',null).then(function(ok){
       if(!ok) return false;
-      return post('/wander/teleport',{lat:lat,lng:lng,fluctuate:($('wmTelFluc')?$('wmTelFluc').checked:true),jitter_m:jitterM()})
+      return post('/wander/teleport',{lat:lat,lng:lng,fluctuate:($('wmTelFluc')?$('wmTelFluc').checked:true),jitter_m:jitterM(),glide:glideOn()})
         .then(function(r){
           if(window.wanderToast) window.wanderToast(r.ok?'📍 Teleported to favorite':'⚠️ Teleport failed');
           return !!r.ok;
@@ -4084,8 +4145,10 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       if(!ok) return;
       // Start = current location (map center as best available proxy on the desktop UI).
       var startPt = (window.map && window.map.getCenter) ? [window.map.getCenter().lat, window.map.getCenter().lng] : dest;
-      post('/wander/route',{points:[startPt,dest],speed_mps:speeds.two,loop:'once',jitter_m:jitterM(),realistic:$('wmTwoRealistic').checked})
-        .then(function(r){ msg($('wmTwoMsg'), r.ok?'Route started.':'Request failed.', r.ok); })
+      var body={points:[startPt,dest],speed_mps:speeds.two,loop:'once',jitter_m:jitterM(),realistic:$('wmTwoRealistic').checked};
+      if(pacing.two==='eta'){ body.pace='eta'; body.mode='drive'; }
+      post('/wander/route',body)
+        .then(function(r){ msg($('wmTwoMsg'), r.ok?(r.paced?'Route started — paced by real ETA.':'Route started.'):'Request failed.', r.ok); })
         .catch(function(){ msg($('wmTwoMsg'),'Network error.',false); });
     });
   });
@@ -4129,8 +4192,11 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     var pts=buildModeRoute(mode, multiPts);
     // Boat/plane carry their own cruising speed; road modes honor the Speed buttons.
     var spd=(mode==='boat'||mode==='plane') ? MODE_SPEEDS[mode] : speeds.multi;
-    post('/wander/route',{points:pts,speed_mps:spd,loop:$('wmMultiLoop').value,jitter_m:jitterM(),realistic:$('wmMultiRealistic').checked})
-      .then(function(r){ msg($('wmMultiMsg'), r.ok?'Route started ('+mode+').':'Request failed.', r.ok); })
+    var body={points:pts,speed_mps:spd,loop:$('wmMultiLoop').value,jitter_m:jitterM(),realistic:$('wmMultiRealistic').checked};
+    // Realistic ETA only applies to road modes (boat/plane already fly a great circle).
+    if(pacing.multi==='eta' && mode!=='boat' && mode!=='plane'){ body.pace='eta'; body.mode=mode; }
+    post('/wander/route',body)
+      .then(function(r){ msg($('wmMultiMsg'), r.ok?('Route started ('+mode+')'+(r.paced?' — paced by real ETA.':'.')):'Request failed.', r.ok); })
       .catch(function(){ msg($('wmMultiMsg'),'Network error.',false); });
   });
 
@@ -4245,7 +4311,45 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     try{ var a=JSON.parse(localStorage.getItem(KEY)||'[]'); return Array.isArray(a)?a:[]; }
     catch(e){ return []; }
   }
-  function save(a){ try{ localStorage.setItem(KEY,JSON.stringify(a)); }catch(e){} }
+  // suppressSync=true when the write is itself the *result* of a pulled merge, so
+  // applying the cloud union doesn't re-fire the push hook into a loop.
+  function save(a, suppressSync){
+    try{ localStorage.setItem(KEY,JSON.stringify(a)); }catch(e){}
+    if(!suppressSync) fireSyncHook();
+  }
+
+  // ---- Cross-device sync plumbing (opt-in, Pro; installed by the account module) ----
+  // The store stays Firebase-free: the account layer installs a hook here and we call
+  // it (best-effort, fully isolated) whenever the saved set changes locally.
+  window.wanderPlacesSyncHook = null;   // set by the account module's sync installer
+  function fireSyncHook(){
+    try{ if(typeof window.wanderPlacesSyncHook==='function') window.wanderPlacesSyncHook(); }catch(e){}
+  }
+  function uuid(){
+    try{ if(window.crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(e){}
+    return 'wp-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);
+  }
+  // Stable sync id/updatedAt used only by cross-device sync. Backfilled lazily so old
+  // records join the union cleanly; the merge KEY is derived from name+coords, not this id.
+  function ensureSyncMeta(f){
+    if(!f) return f;
+    if(!f.id) f.id=uuid();
+    if(typeof f.updatedAt!=='number' || !(f.updatedAt>0)) f.updatedAt=(typeof f.ts==='number'&&f.ts>0)?f.ts:Date.now();
+    return f;
+  }
+  // Snapshot of the current saved places (for the sync layer to union against remote),
+  // each guaranteed to carry an id + updatedAt.
+  window.wanderFavSnapshot=function(){ var a=load(); a.forEach(ensureSyncMeta); return a; };
+  // Replace the saved set with a merged union (called by the sync layer after it unions
+  // local + remote). No-ops if identical; NEVER re-fires the push hook (avoids a loop).
+  window.wanderFavApplyMerged=function(merged){
+    if(!Array.isArray(merged)) return;
+    var cur=JSON.stringify(load());
+    var next=JSON.stringify(merged);
+    if(cur===next) return;            // pull added nothing -> don't churn state/UI
+    save(merged, true);              // suppressSync: this write is the merge result
+    try{ render(); }catch(e){}
+  };
 
   // Back-compat: old records may lack folder/tags/notes. Normalize on read for display.
   function metaFolder(f){ return (f&&typeof f.folder==='string')?f.folder.trim():''; }
@@ -4346,6 +4450,8 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
             a[i].folder=folderInput.value.trim();
             a[i].tags=parseTags(tagsInput.value);
             a[i].notes=notesInput.value;
+            ensureSyncMeta(a[i]);
+            a[i].updatedAt=Date.now();   // metadata edit -> newer wins on the next sync
           }
           save(a); editingIdx=-1; render();
           if(window.wanderToast) window.wanderToast('✓ Favorite updated');
@@ -4389,7 +4495,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     // Skip near-duplicates (~11 m) so repeated saves don't pile up.
     var dup=favs.some(function(f){ return Math.abs(f.lat-c.lat)<0.0001 && Math.abs(f.lng-c.lng)<0.0001; });
     if(dup){ if(window.wanderToast) window.wanderToast('That spot is already saved'); nameIn.value=''; return; }
-    favs.push({name:(nameIn.value||'').trim(), lat:c.lat, lng:c.lng, ts:Date.now(), folder:'', tags:[], notes:''});
+    favs.push({name:(nameIn.value||'').trim(), lat:c.lat, lng:c.lng, ts:Date.now(), folder:'', tags:[], notes:'', id:uuid(), updatedAt:Date.now()});
     save(favs); nameIn.value=''; render();
     if(window.wanderToast) window.wanderToast('★ Saved to Favorites');
   });
@@ -4867,7 +4973,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
            onAuthStateChanged, signOut }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-  import { getFirestore, doc, getDoc }
+  import { getFirestore, doc, getDoc, collection, getDocs, setDoc }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   // Public Firebase web config (safe to embed) — same project as wanderspoofer.com.
@@ -4949,6 +5055,9 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   window.wanderAiRoutine = (lat, lng, opts) => trialCall("/ai/routine", Object.assign({ lat: lat, lng: lng }, opts || {}));
   // AI natural-language teleport — "take me to Times Square" -> {place:{label,lat,lng}}.
   window.wanderAiPlace = (query) => trialCall("/ai/place", { query: query });
+  // Street View key — Pro + daily-quota gated; the Maps key stays a Worker secret and is
+  // returned only to an authorized caller, so it's never bundled in the desktop app.
+  window.wanderStreetViewKey = () => trialCall("/streetview/key");
   window.wanderTrialConsume = async (mode, seconds) => {
     const body = (mode === "joystick") ? { mode, seconds: seconds || 30 } : { mode };
     const r = await trialCall("/trial/consume", body);
@@ -5293,6 +5402,10 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       // Register THIS device on top of the resolved account Pro. Fully fail-safe:
       // any error leaves the Pro state above exactly as-is (see activateDevice).
       activateDevice(isPro);
+      // Cross-device places sync: reveal the toggle for Pro users and (if opted in)
+      // pull-then-push once on sign-in. Fully fail-safe (see syncNow). Guarded in case
+      // this callback ever fires before the (later-declared) sync module initializes.
+      try{ placesSync.onAuthResolved(isPro); }catch(e){}
     } else {
       window.wanderAuthState.signedIn = false;
       window.wanderAuthState.pro = false;
@@ -5306,16 +5419,234 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       devState.atLimit = false; devState.devices = []; devState.limit = 0;
       renderDeviceStatusLine(false);
       if(devOverlay && devOverlay.classList.contains("open")) closeDevSheet();
+      try{ placesSync.onAuthResolved(false); }catch(e){}   // hide the sync toggle, stop syncing
     }
   });
+
+  // ============================================================================
+  // Cross-device Saved Places sync (scoped: wfav- toggle, wacct- account layer).
+  //
+  // Mirrors the user's local favorites/saved places to Firestore at
+  //   users/{uid}/savedPlaces
+  // reusing THIS module's already-initialized Firebase app (auth + db) — no second
+  // sign-in, no new project. Field mapping + merge match wander-android
+  // SavedPlacesSyncManager and wander-ios SavedPlacesSync EXACTLY.
+  //
+  // GUIDING RULE — additive union, never destructive:
+  //   • Merge key = lowercased trimmed name + coords rounded to ~5 decimals.
+  //   • Pull remote, union with local by that key, write the union back locally,
+  //     and push any place the remote is missing / we hold a newer copy of.
+  //   • A place local-only is pushed up (never deleted). A place remote-only is
+  //     pulled down (never deleted remotely). On a key collision the newer
+  //     updatedAt wins the CONTENT, but a conflict never DROPS a place.
+  //   • Deletions do NOT propagate (safest): a place removed on one device
+  //     reappears on the next pull. Documented, intentional — matches iOS/Android.
+  //
+  // GATING: no-op unless the toggle is ON *and* the account is Pro *and* signed in.
+  // SECURITY: strictly per-uid (users/{uid}/savedPlaces) — a user only ever reads
+  //   and writes their OWN places; the uid comes from auth.currentUser, never input.
+  // FAIL-SAFE: every Firestore / network / parse error is swallowed. Local data is
+  //   only ever replaced by a SUPERSET (local ∪ successfully-read remote), so a
+  //   failed or partial sync leaves local places exactly as they were, and nothing
+  //   here can ever crash or block the app.
+  // ============================================================================
+  const placesSync = (function(){
+    const SYNC_KEY = "wanderSyncPlaces";          // opt-in toggle (localStorage). Default OFF.
+    const COL_USERS = "users", COL_PLACES = "savedPlaces";
+    const toggleEl = $("wfavSyncToggle");
+    const rowEl    = $("wfavSyncRow");
+    const noteEl   = $("wfavSyncNote");
+
+    let accountPro = false;
+    let running = false;                          // serialize runs (no interleaving writes)
+
+    function enabledPref(){
+      try{ return localStorage.getItem(SYNC_KEY) === "1"; }catch(e){ return false; }
+    }
+    function setEnabledPref(on){
+      try{ localStorage.setItem(SYNC_KEY, on ? "1" : "0"); }catch(e){}
+    }
+    // True only when sync should actually run: toggle ON, account Pro, signed in.
+    function canSync(){
+      return enabledPref() && accountPro
+        && !!(auth.currentUser && auth.currentUser.uid);
+    }
+
+    // --- mapping + keying (mirror Android toFirestoreMap / mergeKey) ---
+    function mergeKey(p){
+      const name = String(p && p.name || "").trim().toLowerCase();
+      const lat = Math.round((Number(p && p.lat) || 0) * 100000);
+      const lng = Math.round((Number(p && p.lng) || 0) * 100000);
+      return name + "|" + lat + "|" + lng;
+    }
+    // updatedAt as epoch-millis (records may carry ts from before sync existed).
+    function updatedAtOf(p){
+      const u = Number(p && p.updatedAt);
+      if(u > 0) return u;
+      const t = Number(p && p.ts);
+      return t > 0 ? t : 0;
+    }
+    function toFirestoreMap(p){
+      const m = { id: String(p.id), name: String(p.name || ""),
+                  lat: Number(p.lat), lng: Number(p.lng),
+                  updatedAt: updatedAtOf(p) || Date.now() };
+      const folder = (p.folder != null && String(p.folder).trim()) ? String(p.folder).trim() : null;
+      // Desktop stores the note under `notes`; iOS uses `notes`, Android uses `note`.
+      // Write BOTH so a desktop-authored place round-trips on every platform.
+      const note = (p.notes != null && String(p.notes).trim()) ? String(p.notes)
+                 : ((p.note != null && String(p.note).trim()) ? String(p.note) : null);
+      const tags = Array.isArray(p.tags)
+        ? p.tags.map(function(t){ return String(t).trim(); }).filter(function(t){ return t; })
+        : [];
+      if(folder) m.folder = folder;
+      if(note != null){ m.note = note; m.notes = note; }
+      if(tags.length) m.tags = tags;
+      return m;
+    }
+    // Decode a Firestore doc into the desktop favorite shape, tolerating the field-name
+    // differences between platforms (Android lat/lng/note, iOS latitude/longitude/notes).
+    function fromDoc(data, docId){
+      if(!data) return null;
+      const lat = Number(data.lat != null ? data.lat : data.latitude);
+      const lng = Number(data.lng != null ? data.lng : data.longitude);
+      if(!isFinite(lat) || !isFinite(lng)) return null;   // malformed/foreign doc -> skip
+      const name = String(data.name || "");
+      const folderRaw = data.folder;
+      const folder = (folderRaw != null && String(folderRaw).trim()) ? String(folderRaw).trim() : "";
+      const noteRaw = (data.notes != null ? data.notes : data.note);
+      const notes = (noteRaw != null && String(noteRaw).trim()) ? String(noteRaw) : "";
+      const tags = Array.isArray(data.tags)
+        ? data.tags.map(function(t){ return String(t).trim(); }).filter(function(t){ return t; })
+        : [];
+      let ua = Number(data.updatedAt);
+      // Firestore may hand back a Timestamp object; normalize to epoch-millis.
+      if(!isFinite(ua) && data.updatedAt && typeof data.updatedAt.toMillis === "function"){
+        try{ ua = data.updatedAt.toMillis(); }catch(e){ ua = 0; }
+      }
+      if(!isFinite(ua) || ua <= 0) ua = Date.now();
+      const id = (data.id && String(data.id)) || docId || null;
+      return { name: name, lat: lat, lng: lng, folder: folder, tags: tags, notes: notes,
+               ts: ua, id: id, updatedAt: ua };
+    }
+
+    // One additive-union reconcile. Any failure aborts WITHOUT mutating local data.
+    async function sync(){
+      if(!canSync() || running) return;
+      running = true;
+      try{
+        const uid = auth.currentUser && auth.currentUser.uid;
+        if(!uid) return;
+        // STRICTLY per-uid: only ever this signed-in user's own subcollection.
+        const col = collection(db, COL_USERS, uid, COL_PLACES);
+
+        // 1) PULL remote. On any failure we abort (throws -> caught below), so a
+        //    transient outage can never shrink the local store.
+        const snap = await getDocs(col);
+        const remote = [];
+        snap.forEach(function(d){
+          const p = fromDoc(d.data(), d.id);
+          if(p) remote.push(p);
+        });
+
+        // Snapshot local AFTER the (slow) pull so we union the freshest local set.
+        const local = (typeof window.wanderFavSnapshot === "function")
+          ? window.wanderFavSnapshot() : [];
+
+        // 2) UNION by merge key. Keep every place from both sides; on a collision
+        //    keep the newer updatedAt for content, but never drop either place.
+        const byKey = new Map();
+        local.forEach(function(p){
+          const k = mergeKey(p);
+          const ex = byKey.get(k);
+          if(!ex || updatedAtOf(p) >= updatedAtOf(ex)) byKey.set(k, p);
+        });
+        remote.forEach(function(p){
+          const k = mergeKey(p);
+          const ex = byKey.get(k);
+          if(!ex){ byKey.set(k, p); }
+          else if(updatedAtOf(p) > updatedAtOf(ex)){
+            // Remote newer: take its content but keep the local doc id if we had one.
+            const merged = Object.assign({}, p);
+            if(ex.id) merged.id = ex.id;
+            byKey.set(k, merged);
+          }
+        });
+        const union = Array.from(byKey.values());
+        union.forEach(function(p){ if(!p.id) p.id = "wp-" + mergeKey(p).replace(/[^a-z0-9]+/gi, "_").slice(0, 80); });
+
+        // 3) WRITE the union back locally so remote-only items appear here. This is
+        //    always a SUPERSET of local (union never drops a local key), so no local
+        //    place is ever lost. applyMerged no-ops if nothing changed / never loops.
+        if(typeof window.wanderFavApplyMerged === "function"){
+          window.wanderFavApplyMerged(union);
+        }
+
+        // 4) PUSH any place the remote is missing (or we hold a newer copy of). We
+        //    only ever set() docs — never delete — so an absent-remote place is added.
+        const remoteByKey = new Map();
+        remote.forEach(function(p){ remoteByKey.set(mergeKey(p), p); });
+        for(const p of union){
+          const r = remoteByKey.get(mergeKey(p));
+          const needsPush = !r || updatedAtOf(p) > updatedAtOf(r);
+          if(!needsPush) continue;
+          try{
+            await setDoc(doc(col, String(p.id)), toFirestoreMap(p), { merge: true });
+          }catch(e){ /* one failed push never aborts the rest or touches local data */ }
+        }
+      }catch(e){
+        // Absolute backstop: nothing about sync may ever surface or block the app.
+      }finally{
+        running = false;
+      }
+    }
+
+    // Fire-and-forget sync if the gate allows. Safe to call anytime.
+    function syncNow(){
+      if(!canSync()) return;
+      Promise.resolve().then(sync).catch(function(){});
+    }
+
+    function reflectToggleUI(){
+      if(!toggleEl) return;
+      toggleEl.checked = enabledPref();
+      if(rowEl) rowEl.style.display = accountPro ? "" : "none";  // Pro-only affordance
+    }
+
+    // Install the store hook once: any local save/edit pushes up (best-effort, gated).
+    window.wanderPlacesSyncHook = function(){ syncNow(); };
+
+    if(toggleEl){
+      toggleEl.addEventListener("change", function(){
+        if(toggleEl.checked && !accountPro){
+          // Shouldn't happen (row hidden for non-Pro) but stay safe: don't enable.
+          toggleEl.checked = false; return;
+        }
+        setEnabledPref(toggleEl.checked);
+        if(noteEl){
+          noteEl.textContent = toggleEl.checked
+            ? "On — your favorites sync to your Wander account and follow you across devices."
+            : "Mirror favorites to your Wander account so they follow you to iPhone, Android & other machines.";
+        }
+        if(toggleEl.checked) syncNow();          // opt-in now -> pull+push immediately
+      });
+    }
+
+    return {
+      // Called from onAuthStateChanged once the plan is resolved. Reveals the toggle
+      // for Pro users and kicks one sync if they've opted in. Fully fail-safe.
+      onAuthResolved: function(isPro){
+        accountPro = !!isPro;
+        reflectToggleUI();
+        if(accountPro) syncNow();
+      },
+    };
+  })();
 </script>
 
-{% if google_maps_key %}
-<!-- Street View teleport — loads the Google Maps JS API only when the user opens the panel -->
+<!-- Street View teleport — key is fetched from the Worker (Pro + quota) on first open, never bundled -->
 <script>
 (function(){
-  var KEY = "{{ google_maps_key }}";
-  if(!KEY) return;
+  var KEY = null;   // fetched from the Worker on first open; never shipped in the app
   var body=document.getElementById('wsvBody'), toggle=document.getElementById('wsvToggle'),
       panoEl=document.getElementById('wsvPano'), msg=document.getElementById('wsvMsg'), goBtn=document.getElementById('wsvGo'),
       getProBtn=document.getElementById('wsvGetPro');
@@ -5342,7 +5673,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     }catch(e){ msg.textContent='Street View failed to load — check the Maps API key restrictions.'; }
   };
 
-  function loadGM(){
+  function injectGM(){
     if(window.google&&window.google.maps){ if(!gmReady) window.wanderInitStreetView(); return; }
     if(document.getElementById('wsv-gmaps')) return; // already loading
     var s=document.createElement('script'); s.id='wsv-gmaps';
@@ -5350,6 +5681,19 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     s.async=true; s.defer=true;
     s.onerror=function(){ msg.textContent='Could not load Google Maps — check the key + your connection.'; };
     document.head.appendChild(s);
+  }
+  // Fetch the Maps key from the Worker (Pro + daily quota) once, then inject the Maps API.
+  // The key is a Worker secret — it is never bundled in the desktop app.
+  function loadGM(){
+    if(KEY){ injectGM(); return; }
+    msg.textContent='Loading Street View…'; msg.style.display='';
+    var p = window.wanderStreetViewKey ? window.wanderStreetViewKey() : Promise.resolve({ok:false,error:'unavailable'});
+    p.then(function(res){
+      if(res && res.ok && res.key){ KEY=res.key; injectGM(); return; }
+      if(res && res.error==='pro_required'){ showUpsell(); return; }
+      if(res && res.error==='daily_limit'){ msg.textContent="You've reached today's Street View limit — try again tomorrow."; msg.style.display=''; return; }
+      msg.textContent='Street View is unavailable right now.'; msg.style.display='';
+    }).catch(function(){ msg.textContent='Street View is unavailable right now.'; msg.style.display=''; });
   }
 
   function showAt(lat,lng){
@@ -5396,7 +5740,6 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   if(!hookMap()){ var t=setInterval(function(){ if(hookMap()) clearInterval(t); },400); setTimeout(function(){ clearInterval(t); },15000); }
 })();
 </script>
-{% endif %}
 <!-- Local time & weather at the spoofed spot — free Open-Meteo, no API key, no cost -->
 <script>
 (function(){
@@ -5668,6 +6011,177 @@ window.WanderOLC=(function(){
   render();
 })();
 </script>
+<!-- ===== AI "believable day" OFFLINE fallback generator (no network, no secret) =====
+     Ports wander-ios OfflineRoutineGenerator / wander-android OfflineRoutineGenerator.
+     When the Pro /ai/routine Worker call fails or the app is offline, this produces a
+     plausible weekday ENTIRELY on-device in the EXACT shape the Worker returns
+     ({label, kind, lat, lng, arrive, depart}) so the existing routine UI slots in
+     unchanged. It never sees or embeds any AI key and never touches the network.
+
+     Arc (mirrors Android): Home -> Coffee -> Office -> Lunch -> Office -> Gym -> Errand -> Home.
+     Each stop sits a short realistic distance from the anchor via bearing+distance, with
+     arrive/depart clock times flowing forward with believable dwell + jitter. Times render
+     "HH:MM" 24h to match the Worker output. When the user's own saved favorites are passed,
+     the day ANCHORS on them by a name heuristic (home/work/school/gym) so it uses REAL spots. -->
+<script>
+(function(){
+  "use strict";
+  var KM_PER_DEG_LAT = 111.0;
+
+  // Deterministic-per-call PRNG (mulberry32) so a day is coherent within one generate().
+  function makeRng(seed){
+    var s = seed >>> 0;
+    return function(){
+      s |= 0; s = (s + 0x6D2B79F5) | 0;
+      var t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function seedFor(lat, lng, style){
+    // Quantize to ~100 m so tiny pan jitter doesn't reshuffle the whole day.
+    var latKey = Math.round(lat * 1000), lngKey = Math.round(lng * 1000);
+    var hash = 2166136261 >>> 0;                 // FNV-1a 32-bit
+    function mix(v){ hash = (hash ^ (v >>> 0)) >>> 0; hash = Math.imul(hash, 16777619) >>> 0; }
+    mix(latKey); mix(lngKey);
+    var str = String(style || '');
+    for(var i=0;i<str.length;i++) mix(str.charCodeAt(i));
+    return hash === 0 ? 0x9E3779B9 : hash;
+  }
+
+  // Move km from origin along a compass bearing, per the spec's small-angle conversion:
+  //   dLat = km/111 ; dLng = km/(111*cos(lat)).  Poles guarded so dLng can't blow up.
+  function offset(lat, lng, km, bearingDeg){
+    var rad = bearingDeg * Math.PI / 180;
+    var north = km * Math.cos(rad), east = km * Math.sin(rad);
+    var dLat = north / KM_PER_DEG_LAT;
+    var cosLat = Math.max(Math.cos(lat * Math.PI / 180), 1e-6);
+    var dLng = east / (KM_PER_DEG_LAT * cosLat);
+    return [lat + dLat, lng + dLng];
+  }
+  function randKm(rng, min, max){ return min + rng() * (max - min); }
+  function randInt(rng, min, max){ return Math.floor(min + rng() * (max - min)); }   // [min,max)
+  function travel(rng, short){ return short ? randInt(rng,5,12) : randInt(rng,10,25); }
+
+  // Minutes-since-midnight -> "HH:MM" (24h), wrapping across day boundaries. Matches the
+  // Worker's arrive/depart format (String(p.arrive).slice(0,5)).
+  function hhmm(total){
+    var m = ((total % 1440) + 1440) % 1440;
+    var h = Math.floor(m / 60), mm = m % 60;
+    return (h < 10 ? '0' : '') + h + ':' + (mm < 10 ? '0' : '') + mm;
+  }
+  function place(lat, lng, label, kind, arriveMin, departMin){
+    return { label: label, kind: kind, lat: lat, lng: lng,
+             arrive: (arriveMin == null ? '' : hhmm(arriveMin)),
+             depart: (departMin == null ? '' : hhmm(departMin)) };
+  }
+
+  // Persona hint: only the wake time (and thus the whole day's phase) shifts.
+  function personaWake(style){
+    var s = String(style || '').trim().toLowerCase();
+    if(!s) return 7 * 60 + 30;
+    var night = ['night','nocturnal','late','graveyard','evening'];
+    var early = ['early','sunrise','dawn','morning'];
+    for(var i=0;i<night.length;i++) if(s.indexOf(night[i]) !== -1) return 15 * 60;
+    for(var j=0;j<early.length;j++) if(s.indexOf(early[j]) !== -1) return 5 * 60 + 30;
+    return 7 * 60 + 30;
+  }
+
+  // Sort the user's saved favorites into day roles by a case-insensitive name heuristic
+  // (matches the shared iOS/Android contract). First match for a single-slot role wins;
+  // everything else becomes an errand/social "extra", in the user's order.
+  function anchorsFrom(named){
+    var home=null, work=null, school=null, gym=null, extras=[];
+    var HOME=['home','house','apt','dorm'], WORK=['work','office','job'],
+        SCHOOL=['school','college','class','campus','uni'], GYM=['gym','fitness'];
+    function has(n, words){ for(var i=0;i<words.length;i++) if(n.indexOf(words[i]) !== -1) return true; return false; }
+    (named || []).forEach(function(p){
+      if(!p || typeof p.lat!=='number' || typeof p.lng!=='number') return;
+      var n = String(p.name || '').toLowerCase();
+      if(home==null && has(n,HOME)) home=p;
+      else if(work==null && has(n,WORK)) work=p;
+      else if(school==null && has(n,SCHOOL)) school=p;
+      else if(gym==null && has(n,GYM)) gym=p;
+      else extras.push(p);
+    });
+    return { home:home, work:work, school:school, gym:gym, extras:extras, _i:0 };
+  }
+  function nextExtra(a){ var e = a.extras[a._i]; if(e){ a._i++; return e; } return null; }
+
+  // Build a believable day around (lat,lng). Never throws. Returns the Worker's
+  // places[] shape. `named` = the user's saved favorites ({name,lat,lng}).
+  function generate(lat, lng, style, named){
+    try{
+      lat = Number(lat); lng = Number(lng);
+      if(!isFinite(lat) || !isFinite(lng)) return [];
+      var rng = makeRng(seedFor(lat, lng, style));
+      var a = anchorsFrom(named);
+      var clock = personaWake(style) + randInt(rng, 0, 20);
+      var places = [];
+
+      // 1. Home — the user's real "home"-type place if any, else the anchor coord.
+      var homeLat = a.home ? a.home.lat : lat, homeLng = a.home ? a.home.lng : lng;
+      var homeLabel = a.home ? a.home.name : 'Home';
+      var homeDepart = clock + randInt(rng, 25, 45);
+      places.push(place(homeLat, homeLng, homeLabel, 'home', null, homeDepart));
+      clock = homeDepart + travel(rng);
+
+      // 2. Coffee on the way in — very close by.
+      var coffee = offset(lat, lng, randKm(rng, 0.3, 1.2), rng() * 360);
+      var coffeeDepart = clock + randInt(rng, 10, 20);
+      places.push(place(coffee[0], coffee[1], 'Morning coffee', 'coffee', clock, coffeeDepart));
+      clock = coffeeDepart + travel(rng);
+
+      // 3. Daytime anchor — prefer real work, then school, else a synthetic office.
+      var daytime = a.work || a.school;
+      var officeLat, officeLng, officeLabel;
+      if(daytime){ officeLat=daytime.lat; officeLng=daytime.lng; officeLabel=daytime.name; }
+      else { var off = offset(lat, lng, randKm(rng, 1.5, 4.0), rng() * 360);
+        officeLat=off[0]; officeLng=off[1]; officeLabel='Office'; }
+      var officeKind = (a.work==null && a.school!=null) ? 'school' : 'work';
+      var lunchOut = clock + randInt(rng, 180, 230);
+      places.push(place(officeLat, officeLng, officeLabel, officeKind, clock, lunchOut));
+      clock = lunchOut + travel(rng, true);
+
+      // 4. Lunch near the daytime anchor.
+      var lunch = offset(officeLat, officeLng, randKm(rng, 0.2, 0.9), rng() * 360);
+      var lunchDepart = clock + randInt(rng, 35, 60);
+      places.push(place(lunch[0], lunch[1], 'Lunch', 'food', clock, lunchDepart));
+      clock = lunchDepart + travel(rng, true);
+
+      // 5. Back to the daytime anchor for the afternoon.
+      var afternoonEnd = clock + randInt(rng, 210, 260);
+      places.push(place(officeLat, officeLng, officeLabel + ' (afternoon)', officeKind, clock, afternoonEnd));
+      clock = afternoonEnd + travel(rng);
+
+      // 6. Gym after work — the user's real gym if saved, else synthetic.
+      var gymLat, gymLng, gymLabel;
+      if(a.gym){ gymLat=a.gym.lat; gymLng=a.gym.lng; gymLabel=a.gym.name; }
+      else { var g = offset(lat, lng, randKm(rng, 1.0, 3.0), rng() * 360);
+        gymLat=g[0]; gymLng=g[1]; gymLabel='Gym'; }
+      var gymDepart = clock + randInt(rng, 50, 80);
+      places.push(place(gymLat, gymLng, gymLabel, 'gym', clock, gymDepart));
+      clock = gymDepart + travel(rng);
+
+      // 7. Quick errand on the way home — a leftover saved "extra", else synthetic.
+      var extra = nextExtra(a);
+      var errandLat, errandLng, errandLabel;
+      if(extra){ errandLat=extra.lat; errandLng=extra.lng; errandLabel=extra.name; }
+      else { var er = offset(lat, lng, randKm(rng, 0.5, 2.0), rng() * 360);
+        errandLat=er[0]; errandLng=er[1]; errandLabel='Errand'; }
+      var errandDepart = clock + randInt(rng, 15, 30);
+      places.push(place(errandLat, errandLng, errandLabel, 'errand', clock, errandDepart));
+      clock = errandDepart + travel(rng);
+
+      // 8. Home again to close the loop. No depart — the day ends here.
+      places.push(place(homeLat, homeLng, homeLabel, 'home', clock, null));
+      return places;
+    }catch(e){ return []; }
+  }
+
+  window.WanderOfflineRoutine = { generate: generate };
+})();
+</script>
 <!-- ===== AI "believable day" card logic — Pro-gated, calls window.wanderAiRoutine (the Worker) ===== -->
 <script>
 (function(){
@@ -5683,6 +6197,34 @@ window.WanderOLC=(function(){
     return null;
   }
   function esc(s){ return String(s==null?'':s).replace(/[<>&]/g,''); }
+
+  // Render a routine's places into the list. When `offline` is true the day was
+  // generated ON-DEVICE (Worker unreachable) — badge it so the user knows it isn't
+  // the AI's own itinerary, mirroring the "Offline routine" badge on iOS/Android.
+  function showPlaces(places, offline){
+    lastPlaces = places;
+    msg.textContent = offline ? 'Offline — showing a believable day generated on your device.' : '';
+    list.innerHTML = places.map(function(p){
+      return '<li><span>'+esc(p.label)+' <span style="color:#9aa7b4">'+esc(p.kind)+'</span></span>'+
+             '<span style="color:#6b7a8c">'+esc(p.arrive)+(p.depart?('–'+esc(p.depart)):'')+'</span></li>';
+    }).join('');
+    run.style.display='';
+  }
+
+  // Build the offline day from the user's own saved favorites (so it anchors on real
+  // Home/Work/Gym spots when they exist), then hand it to the same UI path.
+  function fallbackOffline(lat, lng, style){
+    if(!window.WanderOfflineRoutine || typeof window.WanderOfflineRoutine.generate !== 'function'){
+      msg.textContent='Couldn’t reach the AI service.'; return;
+    }
+    var named = (typeof window.wanderFavSnapshot === 'function')
+      ? window.wanderFavSnapshot().map(function(f){ return { name:f.name, lat:f.lat, lng:f.lng }; })
+      : [];
+    var places = window.WanderOfflineRoutine.generate(lat, lng, style, named);
+    if(places && places.length){ showPlaces(places, true); }
+    else { msg.textContent='Couldn’t reach the AI service.'; }
+  }
+
   gen.addEventListener('click', function(){
     if(!isPro()){ upsell(); return; }
     if(typeof window.wanderAiRoutine!=='function'){ msg.textContent='Sign in to your Wander account to use AI.'; return; }
@@ -5693,21 +6235,22 @@ window.WanderOLC=(function(){
     gen.disabled=true; msg.textContent=style?'Generating your day…':'Surprising you…'; list.innerHTML=''; run.style.display='none'; lastPlaces=null;
     window.wanderAiRoutine(ll[0], ll[1], style?{style:style}:undefined).then(function(r){
       gen.disabled=false;
-      if(!r){ msg.textContent='Something went wrong — try again.'; return; }
+      if(!r){ fallbackOffline(ll[0], ll[1], style); return; }
       if(r.ok && r.routine && r.routine.places && r.routine.places.length){
-        lastPlaces=r.routine.places; msg.textContent='';
-        list.innerHTML = lastPlaces.map(function(p){
-          return '<li><span>'+esc(p.label)+' <span style="color:#9aa7b4">'+esc(p.kind)+'</span></span>'+
-                 '<span style="color:#6b7a8c">'+esc(p.arrive)+(p.depart?('–'+esc(p.depart)):'')+'</span></li>';
-        }).join('');
-        run.style.display=''; return;
+        showPlaces(r.routine.places, false); return;
       }
       if(r.error==='pro_required'){ upsell(); msg.textContent='AI is a Pro feature.'; return; }
       if(r.error==='daily_limit'){ msg.textContent='You’ve used today’s AI generations (3/day). Try again tomorrow.'; return; }
       if(r.error==='ai_not_configured'){ msg.textContent='AI isn’t switched on yet.'; return; }
       if(r.unauthorized){ msg.textContent='Please sign in again.'; return; }
+      // Offline (network down) OR the Worker reached but the model call itself failed
+      // (ai_error / 502 / timeout) -> degrade gracefully to the on-device day instead
+      // of erroring, so the feature always produces a believable day.
+      if(r.offline || (typeof r.error==='string' && r.error.indexOf('ai_error')===0)){
+        fallbackOffline(ll[0], ll[1], style); return;
+      }
       msg.textContent='Couldn’t generate right now — try again.';
-    }).catch(function(){ gen.disabled=false; msg.textContent='Couldn’t reach the AI service.'; });
+    }).catch(function(){ gen.disabled=false; fallbackOffline(ll[0], ll[1], style); });
   });
   run.addEventListener('click', function(){
     if(!lastPlaces || !lastPlaces.length) return;
@@ -5839,6 +6382,135 @@ window.WanderOLC=(function(){
 })();
 </script>
 
+<!-- ===== Scheduling logic — Pro, time-window auto start/stop. Reuses the same
+     /wander/teleport, /wander/route and /stop_location machinery as the itinerary/loop
+     cards. Purely client-side timers: fires ONLY while the app (this page) is open. ===== -->
+<script>
+(function(){
+  var targetEl=document.getElementById('wschTarget'), startEl=document.getElementById('wschStart'),
+      endEl=document.getElementById('wschEnd'), armBtn=document.getElementById('wschArm'),
+      cancelBtn=document.getElementById('wschCancel'), msg=document.getElementById('wschMsg');
+  if(!armBtn) return;
+  var KEY='wanderSchedule', tick=null, armed=null, activePhase=null;   // activePhase: 'running'|'idle'|null
+  function isPro(){ return window.WANDER_PRO===true || document.body.classList.contains('wander-pro'); }
+  function upsell(){ try{ window.open('https://wanderspoofer.com/pricing/','_blank','noopener'); }catch(e){} }
+
+  // Build the target dropdown from saved spots (favorites) + saved loops. Each option's
+  // value encodes kind+index so Arm can resolve the coordinates/points at fire time.
+  function favs(){ try{ return (typeof window.wanderFavSnapshot==='function')?(window.wanderFavSnapshot()||[]):[]; }catch(e){ return []; } }
+  function loops(){ try{ var a=JSON.parse(localStorage.getItem('wanderSavedLoops')||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+  function refreshTargets(){
+    var prev=targetEl.value;
+    targetEl.innerHTML='';
+    var f=favs(), l=loops();
+    if(!f.length && !l.length){
+      var o=document.createElement('option'); o.value=''; o.textContent='No saved spots or loops yet'; o.disabled=true; targetEl.appendChild(o); return;
+    }
+    if(f.length){
+      var g1=document.createElement('optgroup'); g1.label='Saved spots (teleport)';
+      f.forEach(function(x,i){ var o=document.createElement('option'); o.value='spot:'+i; o.textContent=(x.name||('Spot '+(i+1)))+' — '+Number(x.lat).toFixed(3)+','+Number(x.lng).toFixed(3); g1.appendChild(o); });
+      targetEl.appendChild(g1);
+    }
+    if(l.length){
+      var g2=document.createElement('optgroup'); g2.label='Saved loops (route)';
+      l.forEach(function(x,i){ var o=document.createElement('option'); o.value='loop:'+i; o.textContent=(x.name||('Loop '+(i+1)))+' ('+((x.pts&&x.pts.length)||0)+' pts)'; g2.appendChild(o); });
+      targetEl.appendChild(g2);
+    }
+    if(prev){ targetEl.value=prev; }
+  }
+  // Resolve a dropdown value to a concrete spoof description at fire time (re-reads
+  // storage so edits to the spot/loop after arming are honoured).
+  function resolveTarget(val){
+    var m=/^(spot|loop):(\d+)$/.exec(val||''); if(!m) return null;
+    var idx=parseInt(m[2],10);
+    if(m[1]==='spot'){ var f=favs()[idx]; if(!f) return null; return {kind:'spot', name:f.name, lat:f.lat, lng:f.lng}; }
+    var lp=loops()[idx]; if(!lp||!lp.pts||lp.pts.length<2) return null;
+    return {kind:'loop', name:lp.name, pts:lp.pts};
+  }
+
+  // minutes-since-midnight for an <input type=time> value ("HH:MM"); null if empty.
+  function toMin(v){ if(!v) return null; var p=v.split(':'); if(p.length<2) return null; return (parseInt(p[0],10)||0)*60+(parseInt(p[1],10)||0); }
+  function nowMin(){ var d=new Date(); return d.getHours()*60+d.getMinutes(); }
+  // Is nowMin inside [start,end)? Handles overnight windows (end <= start) that wrap midnight.
+  function inWindow(now,s,e){ if(s===e) return true; return (s<e) ? (now>=s && now<e) : (now>=s || now<e); }
+
+  function startSpoof(t){
+    if(t.kind==='spot'){
+      fetch('/wander/teleport',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({lat:t.lat,lng:t.lng,fluctuate:true})}).catch(function(){});
+    } else {
+      fetch('/wander/route',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({points:t.pts, speed_mps:1.4, loop:'loop', realistic:true})}).catch(function(){});
+    }
+  }
+  function stopSpoof(){ fetch('/stop_location',{method:'POST'}).catch(function(){}); }
+
+  function fmtWindow(s,e){
+    function f(m){ var h=Math.floor(m/60),mm=m%60; return (h<10?'0':'')+h+':'+(mm<10?'0':'')+mm; }
+    return f(s)+' → '+f(e);
+  }
+  function evaluate(){
+    if(!armed) return;
+    var now=nowMin(), want=inWindow(now, armed.start, armed.end);
+    if(want && activePhase!=='running'){
+      var t=resolveTarget(armed.target);
+      if(!t){ msg.textContent='That saved spot/loop is gone — cancel and re-arm.'; return; }
+      startSpoof(t); activePhase='running';
+      msg.textContent='In window ('+fmtWindow(armed.start,armed.end)+') — running '+(t.name||t.kind)+'. Auto-stops at end.';
+    } else if(!want && activePhase!=='idle'){
+      // Only revert if WE were the ones running the spoof (don't stomp a manual session
+      // the user started after the window). We revert on the window's trailing edge.
+      if(activePhase==='running'){ stopSpoof(); }
+      activePhase='idle';
+      msg.textContent='Waiting for next start ('+fmtWindow(armed.start,armed.end)+'). App must stay open.';
+    }
+  }
+  function setArmedUI(on){
+    armBtn.style.display=on?'none':''; cancelBtn.style.display=on?'':'none';
+    targetEl.disabled=on; startEl.disabled=on; endEl.disabled=on;
+  }
+  function arm(){
+    if(!isPro()){ upsell(); return; }
+    var target=targetEl.value, t=resolveTarget(target);
+    if(!t){ msg.textContent='Pick a saved spot or loop first.'; return; }
+    var s=toMin(startEl.value), e=toMin(endEl.value);
+    if(s===null||e===null){ msg.textContent='Set both a start and an end time.'; return; }
+    armed={target:target, start:s, end:e}; activePhase=null;
+    try{ localStorage.setItem(KEY, JSON.stringify(armed)); }catch(err){}
+    setArmedUI(true);
+    if(tick) clearInterval(tick);
+    evaluate();                              // fire immediately if we're already in-window
+    tick=setInterval(evaluate, 15000);       // re-check every 15s while open
+    if(activePhase!=='running') msg.textContent='Armed '+fmtWindow(s,e)+'. Waiting — app must stay open.';
+  }
+  function cancel(userStop){
+    if(tick){ clearInterval(tick); tick=null; }
+    var wasRunning=(activePhase==='running');
+    armed=null; activePhase=null;
+    try{ localStorage.removeItem(KEY); }catch(err){}
+    setArmedUI(false);
+    if(userStop){ if(wasRunning) stopSpoof(); msg.textContent=wasRunning?'Schedule cancelled — real GPS restored.':'Schedule cancelled.'; }
+  }
+  armBtn.addEventListener('click',arm);
+  cancelBtn.addEventListener('click',function(){ cancel(true); });
+  targetEl.addEventListener('mousedown',refreshTargets);   // refresh choices when opening
+  // Re-arm from storage on reload (the window is what persists, not the running state).
+  (function restore(){
+    refreshTargets();
+    try{
+      var a=JSON.parse(localStorage.getItem(KEY)||'null');
+      if(a && a.target && typeof a.start==='number' && typeof a.end==='number'){
+        targetEl.value=a.target;
+        function f(m){ var h=Math.floor(m/60),mm=m%60; return (h<10?'0':'')+h+':'+(mm<10?'0':'')+mm; }
+        startEl.value=f(a.start); endEl.value=f(a.end);
+        armed=a; activePhase=null; setArmedUI(true);
+        if(tick) clearInterval(tick); evaluate(); tick=setInterval(evaluate,15000);
+      }
+    }catch(err){}
+  })();
+})();
+</script>
+
 <!-- ===== 3D globe modal — iframe to same-origin /globe; teleport on pick ===== -->
 <div id="wglobeModal" style="display:none;position:fixed;inset:0;z-index:100000;background:#0b1220">
   <iframe id="wglobeFrame" src="" style="width:100%;height:100%;border:none" title="3D globe"></iframe>
@@ -5906,6 +6578,153 @@ window.WanderOLC=(function(){
   }
   tabs.forEach(function(t){ t.addEventListener('click',function(){
     tabs.forEach(function(x){x.classList.remove('on');}); t.classList.add('on'); show(t.getAttribute('data-t'));
+  }); });
+  show('raids');
+})();
+</script>
+
+<!-- ===== PoGo Hub logic — read-only reference of the 5 LeekDuck feeds (raids/eggs/events/research/rocket).
+     Fetches direct from the Worker (CORS open), caches last good payload in localStorage,
+     and degrades gracefully offline (last-cached + "offline" note). ===== -->
+<script>
+(function(){
+  var card=document.getElementById('wtheme-pogohub'); if(!card) return;
+  var body=document.getElementById('wpghBody'),
+      offNote=document.getElementById('wpghOff'),
+      tabs=card.querySelectorAll('.wpgh-tab');
+  var API="https://wander-payments.wanderlocation.workers.dev/pogo/events?type=";
+  var CKEY="wanderPogoHub:";          // localStorage cache prefix (per type)
+  var mem={};                          // in-session cache
+  var TYPES=['raids','eggs','events','research','rocket'];
+
+  function esc(s){ return String(s==null?'':s).replace(/[<>&]/g,''); }
+  // research task text arrives as an HTML span; strip tags then escape for safe display.
+  function stripTags(s){ return String(s==null?'':s).replace(/<[^>]*>/g,''); }
+  function shiny(c){ return c?' <span class="wpgh-shiny" title="Can be shiny">&#10022;</span>':''; }
+  function typesOf(arr){ return (arr||[]).map(function(t){ return esc(t&&t.name!=null?t.name:t); }).filter(Boolean).join(', '); }
+  function groupBy(arr,key){ var m={},order=[]; (arr||[]).forEach(function(x){ var k=(x&&x[key])||'Other'; if(!m[k]){m[k]=[];order.push(k);} m[k].push(x); }); return order.map(function(k){ return {k:k,items:m[k]}; }); }
+
+  // ---- localStorage cache (last successful payload per type) ----
+  function saveCache(type,d){ try{ localStorage.setItem(CKEY+type, JSON.stringify(d)); }catch(e){} }
+  function readCache(type){ try{ var v=localStorage.getItem(CKEY+type); if(!v) return null; var a=JSON.parse(v); return Array.isArray(a)?a:null; }catch(e){ return null; } }
+
+  // A payload is "usable" only when it's a real array (the Worker returns
+  // {ok:false,error:...} for types it doesn't serve yet — treat that as unavailable).
+  function usable(d){ return Array.isArray(d); }
+
+  // ---- renderers ----
+  function raidCP(cp){
+    if(!cp) return '';
+    var n=cp.normal||cp;
+    if(!n||n.min==null||n.max==null) return '';
+    return '<span class="wpgh-cp">CP '+esc(n.min)+'&ndash;'+esc(n.max)+'</span>';
+  }
+  function renderRaids(d){
+    return groupBy(d,'tier').map(function(g){
+      return '<div class="wpgh-grp">'+esc(g.k)+'</div>'+g.items.map(function(r){
+        var t=typesOf(r.types), cp=raidCP(r.combatPower);
+        return '<div class="wpgh-row"><span class="wpgh-nm">'+esc(r.name)+'</span>'+shiny(r.canBeShiny)+
+          (t?' <span class="wpgh-meta">'+t+'</span>':'')+(cp?' '+cp:'')+'</div>';
+      }).join('');
+    }).join('') || '<div class="wpgh-empty">No raid bosses listed right now.</div>';
+  }
+  function renderEggs(d){
+    return groupBy(d,'eggType').map(function(g){
+      return '<div class="wpgh-grp">'+esc(g.k)+'</div>'+g.items.map(function(e){
+        var cp=(e.combatPower&&e.combatPower.min!=null)?'<span class="wpgh-cp">CP '+esc(e.combatPower.min)+'&ndash;'+esc(e.combatPower.max)+'</span>':'';
+        return '<div class="wpgh-row"><span class="wpgh-nm">'+esc(e.name)+'</span>'+shiny(e.canBeShiny)+
+          (e.isAdventureSync?' <span class="wpgh-meta">(Adventure Sync)</span>':'')+(cp?' '+cp:'')+'</div>';
+      }).join('');
+    }).join('') || '<div class="wpgh-empty">No egg pools listed right now.</div>';
+  }
+  function fmtTime(iso){
+    if(!iso) return '';
+    var dt=new Date(iso); if(isNaN(dt.getTime())) return esc(iso);
+    try{ return dt.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }
+    catch(e){ return dt.toString(); }
+  }
+  function renderEvents(d){
+    var now=Date.now();
+    var list=(d||[]).slice().sort(function(a,b){ return (new Date(a.start||0))-(new Date(b.start||0)); });
+    var cur=[], up=[];
+    list.forEach(function(e){
+      var s=e.start?+new Date(e.start):0, en=e.end?+new Date(e.end):0;
+      if(en && en>=now && s && s<=now) cur.push(e); else if(!en || en>=now) up.push(e);
+    });
+    function row(e){
+      var head=e.heading||e.eventType||'';
+      var when=fmtTime(e.start)+(e.end?' &ndash; '+fmtTime(e.end):'');
+      return '<div class="wpgh-row"><span class="wpgh-nm">'+esc(e.name||head)+'</span>'+
+        (head?' <span class="wpgh-meta">'+esc(head)+'</span>':'')+
+        '<div class="wpgh-cp" style="flex-basis:100%">'+when+'</div></div>';
+    }
+    var html='';
+    if(cur.length) html+='<div class="wpgh-grp">Happening now</div>'+cur.map(row).join('');
+    if(up.length) html+='<div class="wpgh-grp">Upcoming</div>'+up.slice(0,30).map(row).join('');
+    return html || '<div class="wpgh-empty">No events listed right now.</div>';
+  }
+  function renderResearch(d){
+    return (d||[]).map(function(r){
+      var task=stripTags(r.text||r.task||'');
+      var rewards=(r.rewards||[]).map(function(rw){
+        var cp=(rw.combatPower&&rw.combatPower.min!=null)?' <span class="wpgh-cp">CP '+esc(rw.combatPower.min)+'&ndash;'+esc(rw.combatPower.max)+'</span>':'';
+        return esc(rw.name)+shiny(rw.canBeShiny)+cp;
+      }).join(', ');
+      return '<div class="wpgh-row"><span class="wpgh-task">'+esc(task)+'</span>'+
+        '<span class="wpgh-arrow">&rarr;</span>'+(rewards?'<span>'+rewards+'</span>':'<span class="wpgh-meta">reward</span>')+'</div>';
+    }).join('') || '<div class="wpgh-empty">No field research listed right now.</div>';
+  }
+  function renderRocket(d){
+    return (d||[]).map(function(g){
+      var line=[].concat(g.firstPokemon||[], g.secondPokemon||[], g.thirdPokemon||[]);
+      // de-dupe by name for a readable "possible Pokemon" list
+      var seen={}, mons=[];
+      line.forEach(function(p){ if(p&&p.name&&!seen[p.name]){ seen[p.name]=1; mons.push(p); } });
+      var mlist=mons.map(function(p){
+        var enc=p.isEncounter?' <span class="wpgh-meta" title="Catchable after battle">(encounter)</span>':'';
+        return esc(p.name)+shiny(p.canBeShiny)+enc;
+      }).join(', ');
+      var quote=g.title||g.quote||'';
+      var typ=g.type?' <span class="wpgh-meta">'+esc(g.type)+'-type</span>':'';
+      return '<div class="wpgh-grp">'+esc(g.name)+typ+'</div>'+
+        (quote?'<div class="wpgh-meta" style="margin-bottom:2px">'+esc(quote)+'</div>':'')+
+        '<div class="wpgh-row"><span>'+(mlist||'<span class="wpgh-meta">shadow lineup</span>')+'</span></div>';
+    }).join('') || '<div class="wpgh-empty">No Rocket lineups listed right now.</div>';
+  }
+  function paint(type,d){
+    var html;
+    if(type==='raids') html=renderRaids(d);
+    else if(type==='eggs') html=renderEggs(d);
+    else if(type==='events') html=renderEvents(d);
+    else if(type==='research') html=renderResearch(d);
+    else html=renderRocket(d);
+    body.innerHTML=html;
+  }
+
+  function show(type){
+    var cached = mem[type] || readCache(type);
+    // Paint whatever we already have immediately (instant + offline-safe).
+    if(usable(cached)){ paint(type,cached); offNote.classList.remove('on'); }
+    else { body.innerHTML='<div class="wpgh-empty">Loading&hellip;</div>'; }
+
+    fetch(API+encodeURIComponent(type)).then(function(r){ return r.json(); }).then(function(d){
+      if(usable(d)){
+        mem[type]=d; saveCache(type,d); paint(type,d); offNote.classList.remove('on');
+      } else {
+        // Worker returned an error object (e.g. type not served yet): keep cache if any.
+        if(usable(cached)){ paint(type,cached); }
+        else { body.innerHTML='<div class="wpgh-empty">Not available right now.</div>'; }
+      }
+    }).catch(function(){
+      // Network failure: fall back to last-cached payload with a subtle offline note.
+      if(usable(cached)){ paint(type,cached); offNote.classList.add('on'); }
+      else { body.innerHTML='<div class="wpgh-empty">Offline &mdash; no saved '+esc(type)+' data yet.</div>'; }
+    });
+  }
+
+  tabs.forEach(function(t){ t.addEventListener('click',function(){
+    tabs.forEach(function(x){ x.classList.remove('on'); }); t.classList.add('on');
+    show(t.getAttribute('data-t'));
   }); });
   show('raids');
 })();
