@@ -2993,6 +2993,8 @@ function continueAfterDeveloperModeRequired() {
         <button data-mps="1.4">Walk</button><button data-mps="5" class="on">Bike</button><button data-mps="13">Drive</button><button data-pace="eta" title="Pace each leg by its real routing ETA — slows for turns and slow roads like MKDirections">&#9201; Realistic ETA</button>
       </div>
       <button class="wmode-btn sm" id="wmTwoOsm" style="margin-bottom:9px" title="Set speed to the posted road speed limit from OpenStreetMap">&#128739; Use road speed limit (OSM)</button>
+      <button class="wmode-btn sm" id="wmTwoPreview" style="margin-bottom:9px" title="Fetch 2–3 driving route options between here and your destination, then pick one — like Google Maps">&#128506;&#65039; Preview route options</button>
+      <div class="wmode-routes" id="wmTwoRoutes"></div>
       <label class="wmode-chk"><input type="checkbox" id="wmTwoRealistic" checked> Realistic movement (slow into turns)</label>
       <button class="wmode-btn" id="wmTwoGo">Walk route</button>
       <div class="wmode-msg" id="wmTwoMsg"></div>
@@ -3356,6 +3358,9 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   <label class="wpogo-block" id="wpogoBlockRow" title="Prevent a jump while a soft-ban cooldown is still counting down.">
     <input type="checkbox" id="wpogoBlock"> Block until cooldown ends
   </label>
+  <label class="wpogo-block" id="wpogoGuardRow" title="Warn (never block) when a movement speed is above this game's safe pace.">
+    <input type="checkbox" id="wpogoGuard"> Speed guardrail (optional)
+  </label>
   <div class="wpogo-body" id="wpogoBody">Loading hotspots&hellip;</div>
 </div>
 <script>
@@ -3466,6 +3471,8 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
          '<button class="wpogo-btn walk" onclick=\'wpogoWalk('+JSON.stringify(r.points)+','+r.speed_mps+')\'>Walk</button></div>';
     });
     document.getElementById('wpogoBody').innerHTML=h;
+    // Cache the curated spots + apply per-game gating (only Pokémon GO shows them).
+    if(window.wpogoRegate) window.wpogoRegate(h);
   }).catch(function(){document.getElementById('wpogoBody').innerHTML='<div style="padding:18px;color:#c00">Could not load PoGo data. Connect your device first.</div>';});
 })();
 </script>
@@ -3934,6 +3941,22 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     document.body.classList.remove('wander-mode-open');
   }
 
+  // ---- opt-in speed guardrail (set in the Games tab) ----
+  // Warns (never blocks) when a chosen movement speed is over the active game's soft-ban cap.
+  // Reads the cap / toggle / label exposed by the multi-game preset script below.
+  var GUARD_MSG={two:'wmTwoMsg',multi:'wmMultiMsg',joy:'wmJoyMsg'};
+  function guardCheck(key){
+    if(!(window.wanderSpeedGuardOn&&window.wanderSpeedGuardOn())) return;
+    var el=document.getElementById(GUARD_MSG[key]); if(!el) return;
+    var cap=window.wanderGameCapKmh?window.wanderGameCapKmh():35;
+    var kmh=(speeds[key]||0)*3.6;
+    if(kmh>cap){
+      var game=window.wanderActiveGame?window.wanderActiveGame():'this game';
+      msg(el,'⚠ '+Math.round(kmh)+' km/h is over '+game+'’s safe pace (~'+Math.round(cap)+
+          ' km/h) — you may trip its speed check.',false);
+    }
+  }
+
   // ---- speed presets ----
   // Each group has flat-speed buttons (data-mps) plus an optional "Realistic ETA"
   // button (data-pace="eta"). Selecting ETA paces legs by the real routing ETA;
@@ -3949,6 +3972,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
         } else {
           if(pacing[key]!==undefined) pacing[key]='flat';
           speeds[key]=parseFloat(b.getAttribute('data-mps'));
+          guardCheck(key);
         }
       });
     });
@@ -3974,6 +3998,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
         var kmh=d.speed_kmh!=null?d.speed_kmh:Math.round(d.speed_mps*3.6*10)/10;
         var mph=Math.round(d.speed_mps*2.23694);
         msg(msgEl,'Road speed set: '+kmh+' km/h ('+mph+' mph)'+(d.road?' · '+d.road:'')+'.',true);
+        guardCheck(key);   // road speed can exceed a game's safe pace → warn if the guardrail is on
       })
       .catch(function(){ btn.disabled=false; btn.textContent=old; msg(msgEl,'OpenStreetMap lookup failed.',false); });
   }
@@ -4178,6 +4203,68 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       .catch(function(){ msg($('wmJumpMsg'),'Network error.',false); });
   });
 
+  // ---- Two-Spot route options (2–3 alternatives, Google-Maps style) ----
+  // Fetch OSRM driving alternatives between the current map center and the destination, draw them
+  // on the map, and let the user pick one. The chosen route's DENSE road geometry is played as-is
+  // (realistic pace, NOT eta — eta would re-snap it through OSRM's 25-waypoint cap). No server
+  // change needed: /wander/route already paces any given point list without re-snapping. Uses the
+  // CORS-enabled routing.openstreetmap.de car backend (same host the Leaflet preview already uses).
+  var twoAltLayers=[], twoAlts=[], twoAltIdx=0, chosenTwoRoute=null, twoAltsReqDest=null;
+  function clearTwoAlts(){
+    twoAltLayers.forEach(function(l){ try{ window.map.removeLayer(l); }catch(e){} });
+    twoAltLayers=[]; twoAlts=[]; twoAltIdx=0; chosenTwoRoute=null; twoAltsReqDest=null;
+    var box=$('wmTwoRoutes'); if(box) box.innerHTML='';
+  }
+  function drawTwoAlts(){
+    twoAltLayers.forEach(function(l){ try{ window.map.removeLayer(l); }catch(e){} });
+    twoAltLayers=[];
+    twoAlts.forEach(function(alt,i){
+      if(i===twoAltIdx) return;
+      twoAltLayers.push(L.polyline(alt.latlngs,{color:'#8a94a6',weight:5,opacity:0.55}).addTo(window.map));
+    });
+    if(twoAlts[twoAltIdx]){
+      twoAltLayers.push(L.polyline(twoAlts[twoAltIdx].latlngs,{color:'#185FA5',weight:7,opacity:0.95}).addTo(window.map));
+    }
+  }
+  function renderTwoChips(){
+    var box=$('wmTwoRoutes'); if(!box) return;
+    box.innerHTML='';
+    twoAlts.forEach(function(alt,i){
+      var b=document.createElement('button'); b.type='button';
+      var on=(i===twoAltIdx);
+      b.style.cssText='display:block;width:100%;text-align:left;margin:4px 0;padding:8px 10px;border:1px solid '+(on?'#185FA5':'#dbe3ec')+';border-radius:8px;background:'+(on?'#eaf2fb':'#fff')+';cursor:pointer;font-size:13px;color:#0c1a2b';
+      var km=(alt.dist/1000).toFixed(1), mins=Math.max(1,Math.round(alt.dur/60));
+      b.textContent=(i===0?'★ Fastest · ':'Option '+(i+1)+' · ')+km+' km · '+mins+' min';
+      b.addEventListener('click',function(){ twoAltIdx=i; chosenTwoRoute=twoAlts[i]; drawTwoAlts(); renderTwoChips(); });
+      box.appendChild(b);
+    });
+  }
+  function fetchTwoAlts(){
+    var dest=resolve('wmTwoLL');
+    if(!dest){ msg($('wmTwoMsg'),'Pick a destination first.',false); return; }
+    var c=(window.map&&window.map.getCenter)?window.map.getCenter():null;
+    if(!c){ msg($('wmTwoMsg'),'Map not ready.',false); return; }
+    var btn=$('wmTwoPreview'), old=btn.textContent; btn.disabled=true; btn.textContent='Finding routes…';
+    var url='https://routing.openstreetmap.de/routed-car/route/v1/driving/'+c.lng+','+c.lat+';'+dest[1]+','+dest[0]+'?overview=full&geometries=geojson&alternatives=true';
+    fetch(url).then(function(r){return r.json();}).then(function(d){
+      btn.disabled=false; btn.textContent=old;
+      clearTwoAlts();
+      if(!d||d.code!=='Ok'||!d.routes||!d.routes.length){ msg($('wmTwoMsg'),'No route options found for this trip.',false); return; }
+      twoAlts=d.routes.slice(0,3).map(function(rt){
+        var coords=(rt.geometry&&rt.geometry.coordinates)||[];
+        return { latlngs:coords.map(function(p){return [p[1],p[0]];}), dist:rt.distance||0, dur:rt.duration||0 };
+      }).filter(function(a){return a.latlngs.length>=2;});
+      if(!twoAlts.length){ msg($('wmTwoMsg'),'No route options found for this trip.',false); return; }
+      twoAltIdx=0; chosenTwoRoute=twoAlts[0]; twoAltsReqDest=dest;
+      drawTwoAlts(); renderTwoChips();
+      msg($('wmTwoMsg'), (twoAlts.length>1?twoAlts.length+' route options — pick one, then Walk route.':'One route available — Walk route to use it.'), true);
+    }).catch(function(){ btn.disabled=false; btn.textContent=old; msg($('wmTwoMsg'),'Route lookup failed — check your connection.',false); });
+  }
+  if($('wmTwoPreview')) $('wmTwoPreview').addEventListener('click', fetchTwoAlts);
+  if($('wmTwoLL')) $('wmTwoLL').addEventListener('input', clearTwoAlts);   // typing a new dest invalidates the picker
+  if($('wmStop')) $('wmStop').addEventListener('click', clearTwoAlts);
+  qsa('.wmode-tbtn').forEach(function(b){ b.addEventListener('click', clearTwoAlts); });   // switching modes clears drawn options
+
   // ---- Two-Spot (route with 2 points) ----
   $('wmTwoGo').addEventListener('click',function(){
     var dest=resolve('wmTwoLL');
@@ -4187,8 +4274,16 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       if(!ok) return;
       // Start = current location (map center as best available proxy on the desktop UI).
       var startPt = (window.map && window.map.getCenter) ? [window.map.getCenter().lat, window.map.getCenter().lng] : dest;
-      var body={points:[startPt,dest],speed_mps:speeds.two,loop:'once',jitter_m:jitterM(),realistic:$('wmTwoRealistic').checked};
-      if(pacing.two==='eta'){ body.pace='eta'; body.mode='drive'; }
+      // A picked route option (still matching the current destination) plays its dense road geometry
+      // as-is; otherwise fall back to the straight two-point request.
+      var sameDest = twoAltsReqDest && Math.abs(twoAltsReqDest[0]-dest[0])<1e-6 && Math.abs(twoAltsReqDest[1]-dest[1])<1e-6;
+      var body;
+      if(chosenTwoRoute && sameDest && chosenTwoRoute.latlngs.length>=2){
+        body={points:chosenTwoRoute.latlngs,speed_mps:speeds.two,loop:'once',jitter_m:jitterM(),realistic:true};
+      } else {
+        body={points:[startPt,dest],speed_mps:speeds.two,loop:'once',jitter_m:jitterM(),realistic:$('wmTwoRealistic').checked};
+        if(pacing.two==='eta'){ body.pace='eta'; body.mode='drive'; }
+      }
       post('/wander/route',body)
         .then(function(r){ msg($('wmTwoMsg'), r.ok?(r.paced?'Route started — paced by real ETA.':'Route started.'):'Request failed.', r.ok); })
         .catch(function(){ msg($('wmTwoMsg'),'Network error.',false); });
@@ -7015,11 +7110,45 @@ window.WanderOLC=(function(){
 <script>
 (function(){
   var sel=document.getElementById('wpogoGame'), title=document.getElementById('wpogoTitle');
+  var guard=document.getElementById('wpogoGuard');
   if(!sel||!title) return;
-  var KEY='wanderPogoGame';
+  // Per-game soft-ban speed caps (km/h), mirrored from iOS GamePreset / Android PoGoGame.
+  var GAME_CAPS={'Pokémon GO':35,'Monster Hunter Now':16,'Pikmin Bloom':8,'Ingress':60};
+  var CURATED='Pokémon GO';   // only Pokémon GO ships curated spots + live data
+  var KEY='wanderPogoGame', GKEY='wanderSpeedGuard';
+  var spotsHtml=null;              // cache of the rendered curated body, for re-gating on switch
   try{ var saved=localStorage.getItem(KEY); if(saved){ sel.value=saved; } }catch(e){}
-  function apply(){ title.textContent = sel.value + ' Mode'; try{ localStorage.setItem(KEY, sel.value); }catch(e){} }
+  try{ if(guard) guard.checked = localStorage.getItem(GKEY)==='1'; }catch(e){}
+
+  // Exposed for the speed-guardrail check in the movement-modes script.
+  window.wanderActiveGame=function(){ return sel.value; };
+  window.wanderGameCapKmh=function(){ return GAME_CAPS[sel.value]||35; };
+  window.wanderSpeedGuardOn=function(){ return !!(guard&&guard.checked); };
+
+  // Curated hotspots/routes are Pokémon GO community data, so they show only for Pokémon GO;
+  // other games get a "coming soon" note (the cooldown timer + speed guardrail still work). The
+  // fetch IIFE calls this once with the rendered spots HTML; game switches call it with no arg.
+  window.wpogoRegate=function(html){
+    if(html!=null) spotsHtml=html;
+    var b=document.getElementById('wpogoBody'); if(!b) return;
+    if(sel.value===CURATED){ if(spotsHtml!=null) b.innerHTML=spotsHtml; return; }
+    b.innerHTML='';
+    var d=document.createElement('div');
+    d.style.cssText='padding:16px 18px;color:#6b7a8d;font-size:13px;line-height:1.5';
+    d.textContent='Curated spots & live data for '+sel.value+' are coming soon. The cooldown timer '+
+      'and the optional speed guardrail work now — teleport anywhere and Wander paces your soft-ban.';
+    b.appendChild(d);
+  };
+
+  function apply(){
+    title.textContent = sel.value + ' Mode';
+    try{ localStorage.setItem(KEY, sel.value); }catch(e){}
+    window.wpogoRegate();
+  }
   sel.addEventListener('change', apply);
+  if(guard) guard.addEventListener('change', function(){
+    try{ localStorage.setItem(GKEY, guard.checked?'1':'0'); }catch(e){}
+  });
   apply();
 })();
 </script>
