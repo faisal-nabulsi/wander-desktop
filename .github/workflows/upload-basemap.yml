@@ -49,24 +49,49 @@ jobs:
           acl = private
           CONF
 
-      - name: Stream planet -> R2
+      - name: Fetch source size
+        id: src
+        run: |
+          DATE="${{ inputs.build_date }}"
+          SRC_URL="https://build.protomaps.com/${DATE}.pmtiles"
+          # HEAD the source to learn the exact expected byte count.
+          SIZE=$(curl -sIL "$SRC_URL" | awk 'BEGIN{IGNORECASE=1}/^content-length:/{v=$2}END{gsub(/\r/,"",v);print v}')
+          if [ -z "$SIZE" ] || [ "$SIZE" -lt 1000000000 ]; then
+            echo "::error::Could not determine a sane source size for $SRC_URL (got '$SIZE'). Check the build_date at maps.protomaps.com/builds/."
+            exit 1
+          fi
+          echo "Source $SRC_URL is $SIZE bytes ($(awk -v b="$SIZE" 'BEGIN{printf "%.1f", b/1073741824}') GB)"
+          echo "size=$SIZE" >> "$GITHUB_OUTPUT"
+
+      - name: Stream planet -> R2 (resumable multipart — no silent truncation)
         run: |
           set -o pipefail
           DATE="${{ inputs.build_date }}"
-          echo "Uploading https://build.protomaps.com/${DATE}.pmtiles -> r2:wander-basemap/planet.pmtiles"
-          # Primary: rclone http backend reads via HTTP range requests and does an
-          # S3 multipart upload, retrying individual chunks (survives blips, no full-disk buffer).
-          if rclone copyto ":http:${DATE}.pmtiles" "r2:wander-basemap/planet.pmtiles" \
-               --http-url "https://build.protomaps.com" \
-               --s3-no-check-bucket --s3-chunk-size 256M \
-               --low-level-retries 30 --retries 5 --retries-sleep 30s \
-               -v --stats 60s --stats-one-line ; then
-            echo "Upload complete via rclone http backend."
-          else
-            echo "http-backend copy failed; falling back to curl | rclone rcat"
-            curl --http1.1 --retry 12 --retry-delay 15 -fSL "https://build.protomaps.com/${DATE}.pmtiles" \
-              | rclone rcat "r2:wander-basemap/planet.pmtiles" --s3-no-check-bucket --s3-chunk-size 128M -v
-          fi
+          # rclone's S3 multipart only FINALIZES the object once EVERY part uploaded,
+          # so a network blip can never commit a truncated file. (The old curl|rclone-rcat
+          # fallback did exactly that — it silently committed a 6.8% partial. Removed.)
+          # Retry the whole copy a few times; each attempt is self-verifying.
+          ok=""
+          for attempt in 1 2 3; do
+            echo "== upload attempt $attempt of 3 =="
+            if rclone copyto ":http:${DATE}.pmtiles" "r2:wander-basemap/planet.pmtiles" \
+                 --http-url "https://build.protomaps.com" \
+                 --s3-no-check-bucket --s3-chunk-size 256M --s3-upload-concurrency 4 \
+                 --low-level-retries 30 --retries 5 --retries-sleep 30s \
+                 -v --stats 60s --stats-one-line ; then
+              ok=1; break
+            fi
+            echo "attempt $attempt failed; retrying the full multipart copy..."
+          done
+          [ -n "$ok" ] || { echo "::error::rclone multipart upload failed after 3 attempts."; exit 1; }
 
-      - name: Verify size in R2
-        run: rclone size r2:wander-basemap/planet.pmtiles
+      - name: Verify R2 object matches source (fail on truncation)
+        run: |
+          SRC=${{ steps.src.outputs.size }}
+          DST=$(rclone size r2:wander-basemap/planet.pmtiles --json | python3 -c "import sys,json;print(json.load(sys.stdin)['bytes'])")
+          echo "source=$SRC bytes   r2=$DST bytes"
+          if [ "$SRC" != "$DST" ]; then
+            echo "::error::TRUNCATION DETECTED — R2 object is $DST bytes but the source is $SRC bytes. The upload is INCOMPLETE and not usable. Re-run this workflow."
+            exit 1
+          fi
+          echo "OK: R2 object is complete and byte-exact ($DST bytes)."
