@@ -305,6 +305,9 @@ body.dark-mode .modal-footer button {
         <span class="wacct-email" id="wacctEmail" title=""></span>
         <button type="button" class="btn btn-outline-primary" id="wacctSignout">Sign out</button>
       </div>
+      <div class="wacct-row" style="justify-content:flex-end;margin-top:2px">
+        <button type="button" id="wacctDelete" style="background:none;border:none;color:#c0392b;font-size:12px;cursor:pointer;padding:2px 4px;text-decoration:underline">Delete account</button>
+      </div>
       <div class="wacct-plan" id="wacctPlan"></div>
       <div class="wacct-trial" id="wacctTrial" style="display:none"></div>
       <!-- Device registration status + Manage devices (scoped: wdev-) -->
@@ -5477,6 +5480,27 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   overlay.addEventListener("click", (ev)=>{ if(ev.target === overlay) hideSheet(); });
   document.addEventListener("keydown", (ev)=>{ if(ev.key === "Escape" && overlay.classList.contains("open")) hideSheet(); });
   $("wacctSignout").addEventListener("click", ()=>{ signOut(auth).catch(()=>{}); });
+  // Permanently delete the account via the Worker's admin-backed /account/delete (wipes Firestore
+  // + the Firebase user), then sign out. Destructive → confirm first, and warn about billing since
+  // deleting the account does NOT cancel an active subscription.
+  $("wacctDelete") && $("wacctDelete").addEventListener("click", async ()=>{
+    if(!confirm("Delete your Wander account permanently?\n\nThis wipes your saved places, sync, and Pro link — it can't be undone.\n\nIf you pay for a subscription, this does NOT cancel billing — cancel it first at wanderspoofer.com.")) return;
+    const user = auth.currentUser;
+    if(!user) return;
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch(TRIAL_API + "/account/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken })
+      });
+      const data = await res.json().catch(()=>({}));
+      if(data && data.ok){ signOut(auth).catch(()=>{}); }
+      else { alert("Couldn't delete the account. Check your connection and try again."); }
+    } catch(e){
+      alert("Couldn't delete the account. Check your connection and try again.");
+    }
+  });
 
   function busy(on){
     $("wacctSignin").disabled = on;
