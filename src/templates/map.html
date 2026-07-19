@@ -1839,6 +1839,12 @@ async function searchLocation(input, userLocale) {
                 marker.setLatLng([y, x]);
             }
             map.setView([y, x], 13);
+            // Hand the recent-teleports list a human label (shorten the OSM display name).
+            try {
+                if (window.wanderTeleportLabel && results[0].display_name) {
+                    window.wanderTeleportLabel(String(results[0].display_name).split(',').slice(0, 2).join(',').trim());
+                }
+            } catch (e) { /* label is best-effort */ }
             setCoordinates(y, x);
         } else {
             alert('No place found for “' + input + '”. Try a city, a full address, or coordinates like "48.85, 2.29".');
@@ -4278,26 +4284,68 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       box.appendChild(b);
     });
   }
+  // Map the Two-Spot speed button (Walk 1.4 / Bike 5 / Drive 13 m/s) to a Google Routes
+  // travel mode, so a walking/cycling picker asks for walking/cycling alternatives.
+  function twoTravelMode(){
+    var s=speeds.two||13;
+    if(s<=2) return 'walking';
+    if(s<=8) return 'bicycling';
+    return 'driving';
+  }
+  // Commit a normalized [{latlngs,dist,dur}] list into the picker (draw + chips).
+  // Returns false when nothing usable came back so the caller can fall back / warn.
+  function applyTwoAlts(alts, dest){
+    clearTwoAlts();
+    alts=(alts||[]).filter(function(a){ return a && a.latlngs && a.latlngs.length>=2; }).slice(0,3);
+    if(!alts.length) return false;
+    twoAlts=alts; twoAltIdx=0; chosenTwoRoute=twoAlts[0]; twoAltsReqDest=dest;
+    drawTwoAlts(); renderTwoChips();
+    msg($('wmTwoMsg'), (twoAlts.length>1?twoAlts.length+' route options — pick one, then Walk route.':'One route available — Walk route to use it.'), true);
+    return true;
+  }
+  // Baseline provider (free tier + graceful fallback): OSRM driving alternatives, straight
+  // from the CORS-enabled OSM car backend. Unchanged behavior — always available offline of
+  // the Worker / a Pro account. `done()` fires once the request settles (ok or not).
+  function fetchTwoAltsOsrm(dest, c, done){
+    var url='https://routing.openstreetmap.de/routed-car/route/v1/driving/'+c.lng+','+c.lat+';'+dest[1]+','+dest[0]+'?overview=full&geometries=geojson&alternatives=true';
+    fetch(url).then(function(r){return r.json();}).then(function(d){
+      if(done) done();
+      if(!d||d.code!=='Ok'||!d.routes||!d.routes.length){ clearTwoAlts(); msg($('wmTwoMsg'),'No route options found for this trip.',false); return; }
+      var alts=d.routes.map(function(rt){
+        var coords=(rt.geometry&&rt.geometry.coordinates)||[];
+        return { latlngs:coords.map(function(p){return [p[1],p[0]];}), dist:rt.distance||0, dur:rt.duration||0 };
+      });
+      if(!applyTwoAlts(alts, dest)){ msg($('wmTwoMsg'),'No route options found for this trip.',false); }
+    }).catch(function(){ if(done) done(); clearTwoAlts(); msg($('wmTwoMsg'),'Route lookup failed — check your connection.',false); });
+  }
   function fetchTwoAlts(){
     var dest=resolve('wmTwoLL');
     if(!dest){ msg($('wmTwoMsg'),'Pick a destination first.',false); return; }
     var c=(window.map&&window.map.getCenter)?window.map.getCenter():null;
     if(!c){ msg($('wmTwoMsg'),'Map not ready.',false); return; }
     var btn=$('wmTwoPreview'), old=btn.textContent; btn.disabled=true; btn.textContent='Finding routes…';
-    var url='https://routing.openstreetmap.de/routed-car/route/v1/driving/'+c.lng+','+c.lat+';'+dest[1]+','+dest[0]+'?overview=full&geometries=geojson&alternatives=true';
-    fetch(url).then(function(r){return r.json();}).then(function(d){
-      btn.disabled=false; btn.textContent=old;
-      clearTwoAlts();
-      if(!d||d.code!=='Ok'||!d.routes||!d.routes.length){ msg($('wmTwoMsg'),'No route options found for this trip.',false); return; }
-      twoAlts=d.routes.slice(0,3).map(function(rt){
-        var coords=(rt.geometry&&rt.geometry.coordinates)||[];
-        return { latlngs:coords.map(function(p){return [p[1],p[0]];}), dist:rt.distance||0, dur:rt.duration||0 };
-      }).filter(function(a){return a.latlngs.length>=2;});
-      if(!twoAlts.length){ msg($('wmTwoMsg'),'No route options found for this trip.',false); return; }
-      twoAltIdx=0; chosenTwoRoute=twoAlts[0]; twoAltsReqDest=dest;
-      drawTwoAlts(); renderTwoChips();
-      msg($('wmTwoMsg'), (twoAlts.length>1?twoAlts.length+' route options — pick one, then Walk route.':'One route available — Walk route to use it.'), true);
-    }).catch(function(){ btn.disabled=false; btn.textContent=old; msg($('wmTwoMsg'),'Route lookup failed — check your connection.',false); });
+    function restore(){ btn.disabled=false; btn.textContent=old; }
+    // Hybrid routing (mirrors iOS/Android): Pro users get real Google Routes alternatives for
+    // the SELECTED travel mode via the Worker /directions endpoint (Google key stays a Worker
+    // secret). Free users — or any Worker failure (not-Pro, no-route, offline, daily-limit) —
+    // gracefully fall back to the OSRM driving path, so the picker never breaks.
+    if(isPro() && typeof window.wanderDirections==='function'){
+      var origin={lat:c.lat,lng:c.lng}, destination={lat:dest[0],lng:dest[1]};
+      window.wanderDirections(origin, destination, twoTravelMode(), true).then(function(r){
+        if(r && r.ok && r.routes && r.routes.length){
+          var alts=r.routes.map(function(rt){
+            return { latlngs:(rt.points||[]).map(function(p){return [p[0],p[1]];}),
+                     dist:rt.distanceMeters||0, dur:rt.durationSeconds||0 };
+          });
+          restore();
+          if(applyTwoAlts(alts, dest)) return;
+        }
+        // ok:false (pro_required / no_route / daily_limit / offline) or empty → OSRM fallback.
+        fetchTwoAltsOsrm(dest, c, restore);
+      }).catch(function(){ fetchTwoAltsOsrm(dest, c, restore); });
+      return;
+    }
+    fetchTwoAltsOsrm(dest, c, restore);
   }
   if($('wmTwoPreview')) $('wmTwoPreview').addEventListener('click', fetchTwoAlts);
   if($('wmTwoLL')) $('wmTwoLL').addEventListener('input', clearTwoAlts);   // typing a new dest invalidates the picker
@@ -5255,6 +5303,14 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   // Street View key — Pro + daily-quota gated; the Maps key stays a Worker secret and is
   // returned only to an authorized caller, so it's never bundled in the desktop app.
   window.wanderStreetViewKey = () => trialCall("/streetview/key");
+  // Google Routes directions with alternatives — Pro + daily-quota gated (hybrid routing:
+  // free users keep the OSRM path client-side). Mirrors iOS/Android WanderDirections: the
+  // Google key stays a Worker secret; we only pass origin/destination/mode. `alternatives`
+  // asks the Routes API for up to 3 route options (computeAlternativeRoutes) to pick from.
+  // -> { ok, mode, routes:[{ summary, distanceMeters, durationSeconds, points:[[lat,lng],...] }] }
+  window.wanderDirections = (origin, destination, mode, alternatives) =>
+    trialCall("/directions", { origin: origin, destination: destination,
+                               mode: mode || "driving", alternatives: alternatives !== false });
   window.wanderTrialConsume = async (mode, seconds) => {
     const body = (mode === "joystick") ? { mode, seconds: seconds || 30 } : { mode };
     const r = await trialCall("/trial/consume", body);
@@ -6320,7 +6376,18 @@ window.WanderOLC=(function(){
   return {isValid:isValid,isShort:isShort,isFull:isFull,decode:decode,encode:encode,recoverNearest:recoverNearest,resolve:resolve};
 })();
 
-/* Recent teleports history + undo (free; localStorage-persisted, cap 12). */
+/* Recent teleports history + undo (free; localStorage-persisted, cap 12).
+   Mirrors the iOS/Android "recent spots" list: every successful teleport is
+   pushed most-recent-first (deduped by ~11 m so drags/repeats don't spam it),
+   each row re-teleports for real, and Undo reverts to the previous spot.
+
+   Recording is driven from TWO places so every teleport path is covered:
+     • window.wanderFavTeleport — the canonical commit used by the main Teleport
+       button, Favorites, Street View and this list itself (actually POSTs
+       /wander/teleport). Wrapping it captures those spoofs.
+     • window.setCoordinates — the map-click / search / OLC / marker-drag path
+       that only STAGES a coordinate. Wrapping it captures those too.
+   A `suppress` flag stops a re-teleport (row tap / undo) from re-recording. */
 (function(){
   var KEY='wanderTeleHistory', CAP=12;
   var listEl=document.getElementById('wthList'),
@@ -6329,72 +6396,126 @@ window.WanderOLC=(function(){
       clearBtn=document.getElementById('wthClear');
   if(!listEl) return;
   var suppress=false;   // set while re-teleporting / undoing so we don't re-record
+  var pendingLabel=null; // label to attach to the next recorded entry (from search)
   function load(){ try{ var a=JSON.parse(localStorage.getItem(KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
   function save(a){ try{ localStorage.setItem(KEY, JSON.stringify(a.slice(0,CAP))); }catch(e){} }
   function fmt(v){ return (Math.round(v*100000)/100000).toFixed(5); }
+  function ago(ts){
+    if(!ts) return '';
+    var s=Math.max(0,Math.round((Date.now()-ts)/1000));
+    if(s<45) return 'just now';
+    var m=Math.round(s/60); if(m<60) return m+'m ago';
+    var h=Math.round(m/60); if(h<24) return h+'h ago';
+    return Math.round(h/24)+'d ago';
+  }
   function render(){
     var h=load();
     listEl.innerHTML='';
     if(!h.length){ emptyEl.style.display=''; }
     else{
       emptyEl.style.display='none';
-      h.forEach(function(e,idx){
+      h.forEach(function(e){
         var li=document.createElement('li'); li.className='wth-item';
         var go=document.createElement('button'); go.type='button'; go.className='wth-go';
         var label=e.label || (fmt(e.lat)+', '+fmt(e.lng));
-        go.innerHTML='';
         var main=document.createElement('span'); main.textContent=label;
         go.appendChild(main);
-        if(e.label){ var sub=document.createElement('span'); sub.className='wth-sub'; sub.textContent=fmt(e.lat)+', '+fmt(e.lng); go.appendChild(sub); }
+        var subBits=[];
+        if(e.label) subBits.push(fmt(e.lat)+', '+fmt(e.lng));
+        var t=ago(e.ts); if(t) subBits.push(t);
+        if(subBits.length){ var sub=document.createElement('span'); sub.className='wth-sub'; sub.textContent=subBits.join(' · '); go.appendChild(sub); }
         go.title='Teleport to '+label;
-        go.addEventListener('click',function(){ teleportTo(e.lat,e.lng); });
+        go.addEventListener('click',function(){ teleportTo(e.lat,e.lng,e.label); });
         li.appendChild(go); listEl.appendChild(li);
       });
     }
     // Undo enabled only when there's a previous spot to revert to (>=2 entries).
-    undoBtn.disabled = load().length<2;
+    undoBtn.disabled = h.length<2;
   }
-  // Move the map + sync classic coordinate state; suppress re-recording.
-  function teleportTo(lat,lng){
+  // Recenter map + drop the pin + sync classic coordinate state (favorites' idiom).
+  function centerOn(lat,lng){
+    if(window.map&&window.map.setView){
+      try{ window.map.setView([lat,lng], Math.max(13, window.map.getZoom?window.map.getZoom():13)); }catch(e){}
+      if(window.marker&&window.marker.setLatLng) window.marker.setLatLng([lat,lng]);
+      else if(window.L&&window.map){ try{ window.marker=window.L.marker([lat,lng],{draggable:true}).addTo(window.map);
+        if(typeof window.handleMarkerDragEnd==='function') window.marker.on('dragend',window.handleMarkerDragEnd); }catch(e){} }
+    }
+  }
+  // Re-teleport for real: move the map, then COMMIT via the same path favorites use
+  // (wanderFavTeleport -> POST /wander/teleport), falling back to the classic
+  // Set/Teleport button. `suppress` keeps this from re-recording itself.
+  function teleportTo(lat,lng,label){
     suppress=true;
     try{
-      if(window.map&&window.map.setView){
-        try{ window.map.setView([lat,lng], Math.max(13, window.map.getZoom?window.map.getZoom():13)); }catch(e){}
-        if(window.marker&&window.marker.setLatLng) window.marker.setLatLng([lat,lng]);
-      }
+      centerOn(lat,lng);
       if(typeof window.setCoordinates==='function'){ try{ window.setCoordinates(lat,lng); }catch(e){} }
     } finally { suppress=false; }
+    if(typeof window.wanderFavTeleport==='function'){ try{ window.wanderFavTeleport(lat,lng); }catch(e){} }
+    else if(typeof window.setLocation==='function'){ try{ window.setLocation(); }catch(e){} }
+    // Move this spot back to the top so it becomes the new "current" (deduped).
+    record(lat,lng,label,true);
   }
   window.wanderRecentTeleportTo=teleportTo;
-  function record(lat,lng,label){
-    if(suppress) return;
+  // force: record even while suppressed (used by teleportTo to reorder history).
+  function record(lat,lng,label,force){
+    if(suppress && !force) return;
     if(typeof lat!=='number'||typeof lng!=='number'||isNaN(lat)||isNaN(lng)) return;
+    label = label || pendingLabel || '';
+    pendingLabel=null;
     var h=load();
     // Skip if same as the most recent entry (~11 m) — avoids drag/duplicate spam.
     if(h.length && Math.abs(h[0].lat-lat)<0.0001 && Math.abs(h[0].lng-lng)<0.0001){
-      if(label && !h[0].label){ h[0].label=label; save(h); render(); }
+      h[0].ts=Date.now();
+      if(label && !h[0].label) h[0].label=label;
+      save(h); render();
       return;
+    }
+    // If this exact spot exists deeper in the list, pull it to the top (dedupe).
+    for(var i=1;i<h.length;i++){
+      if(Math.abs(h[i].lat-lat)<0.0001 && Math.abs(h[i].lng-lng)<0.0001){
+        if(!label) label=h[i].label||'';
+        h.splice(i,1); break;
+      }
     }
     h.unshift({lat:lat, lng:lng, label:label||'', ts:Date.now()});
     save(h); render();
   }
   window.wanderRecordTeleport=record;
-  // Hook the central location setter so search/teleport/favorite jumps get logged.
+  // Let the search path hand us a human label (OSM display name) for the NEXT record.
+  window.wanderTeleportLabel=function(label){ if(label) pendingLabel=String(label); };
+  function num(v){ return typeof v==='number'?v:parseFloat(v); }
+  // Hook the canonical commit (main Teleport button / Favorites / Street View).
+  if(typeof window.wanderFavTeleport==='function'){
+    var _ft=window.wanderFavTeleport;
+    window.wanderFavTeleport=function(lat,lng){
+      try{ record(num(lat),num(lng)); }catch(e){}
+      return _ft.apply(this,arguments);
+    };
+  }
+  // Hook the central coordinate setter (map-click / search / OLC / marker-drag).
   if(typeof window.setCoordinates==='function'){
     var _sc=window.setCoordinates;
     window.setCoordinates=function(lat,lng){
       try{ return _sc.apply(this,arguments); }
-      finally { try{ record(typeof lat==='number'?lat:parseFloat(lat), typeof lng==='number'?lng:parseFloat(lng)); }catch(e){} }
+      finally { try{ record(num(lat),num(lng)); }catch(e){} }
     };
   }
   undoBtn.addEventListener('click',function(){
     var h=load();
     if(h.length<2) return;
-    // Drop the current spot; revert to the previous one.
+    // Drop the current spot; revert to the previous one (and re-teleport for real).
     h.shift();
     save(h); render();
     var prev=h[0];
-    if(prev) teleportTo(prev.lat, prev.lng);
+    if(prev){
+      suppress=true;
+      try{
+        centerOn(prev.lat,prev.lng);
+        if(typeof window.setCoordinates==='function'){ try{ window.setCoordinates(prev.lat,prev.lng); }catch(e){} }
+      } finally { suppress=false; }
+      if(typeof window.wanderFavTeleport==='function'){ try{ window.wanderFavTeleport(prev.lat,prev.lng); }catch(e){} }
+      else if(typeof window.setLocation==='function'){ try{ window.setLocation(); }catch(e){} }
+    }
     if(window.wanderToast) window.wanderToast('↩︎ Reverted to previous spot');
   });
   clearBtn.addEventListener('click',function(){ save([]); render(); });
