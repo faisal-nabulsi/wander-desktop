@@ -461,6 +461,50 @@ body.dark-mode .modal-footer button {
     <ul id="wslList" class="wsl-list"></ul>
   </div>
 
+  <!-- ===== Record & replay (Pro) — record the path you drive, replay it later ===== -->
+  <style>
+    #wtheme-rec .wrec-name{width:100%;padding:6px 8px;border:1px solid #dbe3ec;border-radius:8px;font-size:12.5px;margin-bottom:6px}
+    #wtheme-rec .wrec-btn{width:100%;padding:8px;border:none;border-radius:9px;background:#185FA5;color:#fff;font-weight:600;cursor:pointer}
+    #wtheme-rec .wrec-btn.recording{background:#c0392b}
+    #wtheme-rec .wrec-pro{display:none;font-size:9.5px;font-weight:800;letter-spacing:.4px;vertical-align:middle;padding:1px 6px;border-radius:6px;background:linear-gradient(135deg,#f0a500,#e07b00);color:#fff}
+    body:not(.wander-pro) #wtheme-rec .wrec-pro{display:inline-block}
+    #wtheme-rec .wrec-list{margin:8px 0 0;padding:0;list-style:none;font-size:12.5px}
+    #wtheme-rec .wrec-list li{display:flex;align-items:center;gap:6px;padding:4px 0;border-top:1px solid #eef2f7}
+    #wtheme-rec .wrec-list .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #wtheme-rec .wrec-list button{border:none;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer}
+    #wtheme-rec .wrec-play{background:#185FA5;color:#fff}
+    #wtheme-rec .wrec-del{background:#eef2f7;color:#6b7a8c}
+    #wtheme-rec .wrec-msg{font-size:12px;color:#6b7a8c;margin:6px 0 0;line-height:1.45}
+  </style>
+  <div class="mb-3" id="wtheme-rec">
+    <div class="wtheme-card-title">Record &amp; replay <span class="wrec-pro">PRO</span></div>
+    <input type="text" id="wrecName" class="wrec-name" placeholder="Recording name (optional)" maxlength="40">
+    <button type="button" id="wrecToggle" class="wrec-btn">&#9679; Start recording</button>
+    <div id="wrecMsg" class="wrec-msg">Hit record, then drive with the joystick or run a route. Stop to save the exact path &amp; pace — replay it anytime.</div>
+    <ul id="wrecList" class="wrec-list"></ul>
+  </div>
+
+  <!-- ===== Auto-stop zone (Pro) — clear the sim (resume real GPS) when a route reaches a zone ===== -->
+  <style>
+    #wtheme-geo .wgeo-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+    #wtheme-geo .wgeo-row label{font-size:12px;color:#6b7a8c;white-space:nowrap}
+    #wtheme-geo .wgeo-radius{flex:1;padding:6px 8px;border:1px solid #dbe3ec;border-radius:8px;font-size:12.5px}
+    #wtheme-geo .wgeo-btn{width:100%;padding:8px;border:none;border-radius:9px;background:#185FA5;color:#fff;font-weight:600;cursor:pointer}
+    #wtheme-geo .wgeo-btn.armed{background:#1c7a3f}
+    #wtheme-geo .wgeo-pro{display:none;font-size:9.5px;font-weight:800;letter-spacing:.4px;vertical-align:middle;padding:1px 6px;border-radius:6px;background:linear-gradient(135deg,#f0a500,#e07b00);color:#fff}
+    body:not(.wander-pro) #wtheme-geo .wgeo-pro{display:inline-block}
+    #wtheme-geo .wgeo-msg{font-size:12px;color:#6b7a8c;margin:6px 0 0;line-height:1.45}
+  </style>
+  <div class="mb-3" id="wtheme-geo">
+    <div class="wtheme-card-title">Auto-stop zone <span class="wgeo-pro">PRO</span></div>
+    <div class="wgeo-row">
+      <label for="wgeoRadius">Radius (m)</label>
+      <input type="number" id="wgeoRadius" class="wgeo-radius" value="120" min="20" max="50000" step="10">
+    </div>
+    <button type="button" id="wgeoArm" class="wgeo-btn">&#128681; Arm at map center</button>
+    <div id="wgeoMsg" class="wgeo-msg">Center the map on a spot (e.g. home), set a radius, and Arm. When a running route reaches it, spoofing stops and your iPhone returns to its real GPS.</div>
+  </div>
+
   <!-- ===== AI natural-language teleport (Pro, 5/day) — "take me to Times Square" ===== -->
   <style>
     #wtheme-nlt .wnlt-row{display:flex;gap:6px}
@@ -601,7 +645,7 @@ body.dark-mode .modal-footer button {
     </div>
     <div class="wsch-row"><label class="wsch-lbl">Start</label><input id="wschStart" type="time" title="Auto-start time">
       <label class="wsch-lbl">End</label><input id="wschEnd" type="time" title="Auto-stop time"></div>
-    <div class="wsch-caveat">&#9888;&#65039; Wander must stay <b>open</b> for this to fire — there is no background service or OS cron. If you quit the app, the schedule won't run.</div>
+    <div class="wsch-caveat">&#9888;&#65039; Runs in the <b>background</b> while Wander is open — the window can be minimised, and the schedule survives reloads and app restarts. It can't fire while the app is fully <b>quit</b> (desktop spoofing needs Wander running), but it re-arms itself on the next launch.</div>
     <button type="button" id="wschArm" class="wsch-arm">&#9200; Arm schedule</button>
     <button type="button" id="wschCancel" class="wsch-cancel">&#9632; Cancel schedule</button>
     <div class="wsch-msg" id="wschMsg">Pick a saved spot or loop, set a start &amp; end time, then Arm.</div>
@@ -5105,7 +5149,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
            onAuthStateChanged, signOut, sendPasswordResetEmail,
            GoogleAuthProvider, OAuthProvider, signInWithPopup,
-           signInWithRedirect, getRedirectResult,
+           signInWithRedirect, getRedirectResult, signInWithCredential,
            getMultiFactorResolver, TotpMultiFactorGenerator }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import { getFirestore, doc, getDoc, collection, getDocs, setDoc }
@@ -5633,7 +5677,45 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       busy(false); if(label) label.textContent = prev;
     }
   }
-  $("wacctGoogle").addEventListener("click", ()=>{
+  // Native system-browser OAuth2 + PKCE (installed-app loopback flow). Google blocks OAuth in
+  // embedded webviews, so opening the real browser is more reliable than the Firebase popup.
+  // The backend opens the browser and exchanges the code for an id_token; we poll for it and
+  // finish with signInWithCredential. Returns true on success, false to fall back to Firebase.
+  async function googleNativeSignIn(){
+    setErr(""); busy(true);
+    const btn=$("wacctGoogle"), label=btn?btn.querySelector("span"):null;
+    const prev=label?label.textContent:""; if(label) label.textContent="Opening browser…";
+    try{
+      const start = await fetch('/auth/google/start',{method:'POST'}).then(r=>r.json());
+      if(!start || !start.ok || !start.state){ return false; }
+      if(label) label.textContent="Waiting for browser…";
+      let idToken=null;
+      for(let i=0;i<75;i++){                              // ~2.5 min
+        await new Promise(r=>setTimeout(r,2000));
+        const res = await fetch('/auth/google/result?state='+encodeURIComponent(start.state))
+                          .then(r=>r.json()).catch(()=>null);
+        if(res && res.id_token){ idToken=res.id_token; break; }
+        if(res && res.error){ break; }
+      }
+      if(!idToken){ return false; }
+      await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
+      hideSheet();
+      return true;
+    }catch(e){
+      if(maybe2fa(e)) return true;
+      return false;
+    }finally{
+      busy(false); if(label) label.textContent=prev;
+    }
+  }
+  $("wacctGoogle").addEventListener("click", async ()=>{
+    // Prefer native OAuth when a Desktop client is configured; otherwise use Firebase popup/redirect.
+    try{
+      const cfg = await fetch('/auth/google/config').then(r=>r.json());
+      if(cfg && cfg.enabled){
+        if(await googleNativeSignIn()) return;         // signed in natively
+      }
+    }catch(e){ /* fall through to Firebase */ }
     const p = new GoogleAuthProvider();
     oauthSignIn(p, "wacctGoogle");
   });
@@ -6699,7 +6781,22 @@ window.WanderOLC=(function(){
       endEl=document.getElementById('wschEnd'), armBtn=document.getElementById('wschArm'),
       cancelBtn=document.getElementById('wschCancel'), msg=document.getElementById('wschMsg');
   if(!armBtn) return;
-  var KEY='wanderSchedule', tick=null, armed=null, activePhase=null;   // activePhase: 'running'|'idle'|null
+  var KEY='wanderSchedule', tick=null, armed=null, activePhase=null, poll=null;   // activePhase legacy
+  function stopPoll(){ if(poll){ clearInterval(poll); poll=null; } }
+  function fmt(m){ var h=Math.floor(m/60),mm=m%60; return (h<10?'0':'')+h+':'+(mm<10?'0':'')+mm; }
+  function startPoll(){
+    stopPoll();
+    function tickStatus(){
+      fetch('/wander/schedule/get').then(function(r){return r.json();}).then(function(s){
+        if(!s||!s.on){ return; }
+        var win=fmtWindow(s.start,s.end);
+        msg.textContent = (s.phase==='running')
+          ? '● In window ('+win+') — spoof running. Auto-stops at the end time.'
+          : 'Armed '+win+' — waiting for the start time. Runs while Wander is open.';
+      }).catch(function(){});
+    }
+    tickStatus(); poll=setInterval(tickStatus, 10000);
+  }
   function isPro(){ return window.WANDER_PRO===true || document.body.classList.contains('wander-pro'); }
   function upsell(){ try{ window.open('https://wanderspoofer.com/pricing/','_blank','noopener'); }catch(e){} }
 
@@ -6783,21 +6880,23 @@ window.WanderOLC=(function(){
     if(!t){ msg.textContent='Pick a saved spot or loop first.'; return; }
     var s=toMin(startEl.value), e=toMin(endEl.value);
     if(s===null||e===null){ msg.textContent='Set both a start and an end time.'; return; }
-    armed={target:target, start:s, end:e}; activePhase=null;
-    try{ localStorage.setItem(KEY, JSON.stringify(armed)); }catch(err){}
-    setArmedUI(true);
-    if(tick) clearInterval(tick);
-    evaluate();                              // fire immediately if we're already in-window
-    tick=setInterval(evaluate, 15000);       // re-check every 15s while open
-    if(activePhase!=='running') msg.textContent='Armed '+fmtWindow(s,e)+'. Waiting — app must stay open.';
+    // The backend now owns firing (a Python thread), so the schedule runs even if this page
+    // is minimised or reloaded, and it persists across restarts. Send the RESOLVED target.
+    fetch('/wander/schedule/set',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({target:t, start:s, end:e})})
+      .then(function(r){return r.json();}).then(function(res){
+        if(!res||!res.ok){ msg.textContent='Could not arm the schedule.'; return; }
+        try{ localStorage.setItem(KEY, JSON.stringify({target:target, start:s, end:e})); }catch(err){}
+        setArmedUI(true); startPoll();
+        msg.textContent='Armed '+fmtWindow(s,e)+'. Runs in the background while Wander is open.';
+      }).catch(function(){ msg.textContent='Could not arm the schedule.'; });
   }
   function cancel(userStop){
-    if(tick){ clearInterval(tick); tick=null; }
-    var wasRunning=(activePhase==='running');
-    armed=null; activePhase=null;
+    stopPoll();
+    fetch('/wander/schedule/clear',{method:'POST'}).catch(function(){});
     try{ localStorage.removeItem(KEY); }catch(err){}
     setArmedUI(false);
-    if(userStop){ if(wasRunning) stopSpoof(); msg.textContent=wasRunning?'Schedule cancelled — real GPS restored.':'Schedule cancelled.'; }
+    if(userStop){ msg.textContent='Schedule cancelled — real GPS restored.'; }
   }
   armBtn.addEventListener('click',arm);
   cancelBtn.addEventListener('click',function(){ cancel(true); });
@@ -6805,16 +6904,18 @@ window.WanderOLC=(function(){
   // Re-arm from storage on reload (the window is what persists, not the running state).
   (function restore(){
     refreshTargets();
-    try{
-      var a=JSON.parse(localStorage.getItem(KEY)||'null');
-      if(a && a.target && typeof a.start==='number' && typeof a.end==='number'){
-        targetEl.value=a.target;
-        function f(m){ var h=Math.floor(m/60),mm=m%60; return (h<10?'0':'')+h+':'+(mm<10?'0':'')+mm; }
-        startEl.value=f(a.start); endEl.value=f(a.end);
-        armed=a; activePhase=null; setArmedUI(true);
-        if(tick) clearInterval(tick); evaluate(); tick=setInterval(evaluate,15000);
+    var saved=null; try{ saved=JSON.parse(localStorage.getItem(KEY)||'null'); }catch(err){}
+    if(saved && saved.target && typeof saved.start==='number'){
+      targetEl.value=saved.target; startEl.value=fmt(saved.start); endEl.value=fmt(saved.end);
+    }
+    // The backend owns firing now — if a schedule is still armed there (survived a reload or
+    // an app restart), reflect it in the UI and resume the status poll.
+    fetch('/wander/schedule/get').then(function(r){return r.json();}).then(function(s){
+      if(s && s.on && typeof s.start==='number'){
+        startEl.value=fmt(s.start); endEl.value=fmt(s.end);
+        setArmedUI(true); startPoll();
       }
-    }catch(err){}
+    }).catch(function(){});
   })();
 })();
 </script>
@@ -7119,6 +7220,127 @@ window.WanderOLC=(function(){
     if(nameEl) nameEl.value=''; msg.textContent='Saved “'+esc(name)+'”.'; render();
   });
   render();
+})();
+</script>
+
+<!-- ===== Record & replay card logic — Pro-gated; records via /wander/record/*, replays saved paths ===== -->
+<script>
+(function(){
+  var toggle=document.getElementById('wrecToggle'), nameEl=document.getElementById('wrecName'),
+      listEl=document.getElementById('wrecList'), msg=document.getElementById('wrecMsg');
+  if(!toggle) return;
+  var KEY='wanderRecordings';
+  var recording=false, poll=null;
+  function isPro(){ return window.WANDER_PRO===true || document.body.classList.contains('wander-pro'); }
+  function upsell(){ try{ window.open('https://wanderspoofer.com/pricing/','_blank','noopener'); }catch(e){} }
+  function load(){ try{ var a=JSON.parse(localStorage.getItem(KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+  function store(a){ try{ localStorage.setItem(KEY, JSON.stringify(a.slice(0,50))); }catch(e){} }
+  function esc(s){ return String(s==null?'':s).replace(/[<>&]/g,''); }
+  function fmtDur(s){ s=Math.round(s||0); var m=Math.floor(s/60); return m ? (m+'m '+(s%60)+'s') : (s+'s'); }
+  function setBtn(){
+    toggle.classList.toggle('recording', recording);
+    toggle.innerHTML = recording ? '&#9632; Stop recording' : '&#9679; Start recording';
+  }
+  function play(r){
+    if(!isPro()){ upsell(); return; }
+    if(!r.pts || r.pts.length<2){ msg.textContent='That recording is too short to replay.'; return; }
+    fetch('/wander/record/replay',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({points:r.pts, loop:'once', fluctuate:true})})
+      .then(function(){ if(window.wanderToast) window.wanderToast('▶ Replaying: '+r.name); })
+      .catch(function(){ if(window.wanderToast) window.wanderToast('Could not start the replay.'); });
+  }
+  function render(){
+    var arr=load(); listEl.innerHTML='';
+    arr.forEach(function(r,i){
+      var li=document.createElement('li');
+      var nm=document.createElement('span'); nm.className='nm';
+      nm.textContent=r.name+' ('+((r.pts&&r.pts.length)||0)+' pts · '+fmtDur(r.seconds)+')'; li.appendChild(nm);
+      var pl=document.createElement('button'); pl.className='wrec-play'; pl.textContent='▶ Play';
+      pl.addEventListener('click',function(){ play(r); }); li.appendChild(pl);
+      var del=document.createElement('button'); del.className='wrec-del'; del.textContent='✕';
+      del.addEventListener('click',function(){ var a=load(); a.splice(i,1); store(a); render(); }); li.appendChild(del);
+      listEl.appendChild(li);
+    });
+  }
+  function startRec(){
+    fetch('/wander/record/start',{method:'POST'}).then(function(){
+      recording=true; setBtn();
+      msg.textContent='● Recording… drive with the joystick or run a route, then Stop.';
+      poll=setInterval(function(){
+        fetch('/wander/record/status').then(function(r){return r.json();}).then(function(s){
+          if(s && s.on){ msg.textContent='● Recording… '+(s.count||0)+' points captured. Stop when done.'; }
+        }).catch(function(){});
+      }, 1500);
+    }).catch(function(){ msg.textContent='Could not start recording.'; });
+  }
+  function stopRec(){
+    if(poll){ clearInterval(poll); poll=null; }
+    fetch('/wander/record/stop',{method:'POST'}).then(function(r){return r.json();}).then(function(s){
+      recording=false; setBtn();
+      var pts=(s && s.points)||[];
+      if(pts.length<2){ msg.textContent='Nothing recorded — no movement was captured while recording.'; return; }
+      var name=((nameEl && nameEl.value)||'').trim().slice(0,40);
+      if(!name){ name='Recording '+(load().length+1); }
+      var arr=load(); arr.unshift({name:esc(name), pts:pts, seconds:(s.seconds||0)}); store(arr);
+      if(nameEl) nameEl.value='';
+      msg.textContent='Saved “'+esc(name)+'” — '+pts.length+' points, '+fmtDur(s.seconds)+'. Replay it below.';
+      render();
+    }).catch(function(){ recording=false; setBtn(); msg.textContent='Could not stop/save the recording.'; });
+  }
+  toggle.addEventListener('click',function(){
+    if(!isPro()){ upsell(); return; }
+    if(recording) stopRec(); else startRec();
+  });
+  setBtn(); render();
+})();
+</script>
+
+<!-- ===== Auto-stop zone card logic — Pro-gated; arms via /wander/geofence/*, draws a circle, polls for the hit ===== -->
+<script>
+(function(){
+  var arm=document.getElementById('wgeoArm'), radEl=document.getElementById('wgeoRadius'),
+      msg=document.getElementById('wgeoMsg');
+  if(!arm) return;
+  var armed=false, circle=null, poll=null;
+  function isPro(){ return window.WANDER_PRO===true || document.body.classList.contains('wander-pro'); }
+  function upsell(){ try{ window.open('https://wanderspoofer.com/pricing/','_blank','noopener'); }catch(e){} }
+  function setBtn(){ arm.classList.toggle('armed', armed); arm.innerHTML = armed ? '&#9632; Disarm zone' : '&#128681; Arm at map center'; }
+  function clearCircle(){ if(circle && window.map){ try{ window.map.removeLayer(circle); }catch(e){} } circle=null; }
+  function stopPoll(){ if(poll){ clearInterval(poll); poll=null; } }
+  function disarm(silent){
+    stopPoll();
+    fetch('/wander/geofence/clear',{method:'POST'}).catch(function(){});
+    armed=false; setBtn(); clearCircle();
+    if(!silent) msg.textContent='Zone disarmed.';
+  }
+  function armZone(){
+    if(!isPro()){ upsell(); return; }
+    if(!window.map || !window.map.getCenter){ msg.textContent='Map not ready yet.'; return; }
+    var c=window.map.getCenter();
+    var r=Math.max(20, Math.min(50000, parseFloat(radEl && radEl.value)||120));
+    fetch('/wander/geofence/set',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({on:true, zones:[{name:'Zone', lat:c.lat, lng:c.lng, radius_m:r}]})})
+      .then(function(res){return res.json();}).then(function(s){
+        if(!s || !s.on){ msg.textContent='Could not arm the zone.'; return; }
+        armed=true; setBtn(); clearCircle();
+        try{ circle=L.circle([c.lat,c.lng],{radius:r,color:'#1c7a3f',weight:2,fillColor:'#1c7a3f',fillOpacity:0.12}).addTo(window.map); }catch(e){}
+        msg.textContent='● Armed: '+Math.round(r)+' m zone. Run a route toward it — spoofing stops on arrival.';
+        stopPoll();
+        poll=setInterval(function(){
+          fetch('/wander/geofence/get').then(function(r){return r.json();}).then(function(g){
+            if(g && g.hit){
+              if(window.wanderToast) window.wanderToast('🏁 Reached the zone — reverted to real GPS.');
+              msg.textContent='🏁 Reached the zone — spoofing stopped, iPhone is back on real GPS.';
+              armed=false; setBtn(); clearCircle(); stopPoll();
+            } else if(g && !g.on){
+              armed=false; setBtn(); clearCircle(); stopPoll();
+            }
+          }).catch(function(){});
+        }, 2000);
+      }).catch(function(){ msg.textContent='Could not arm the zone.'; });
+  }
+  arm.addEventListener('click',function(){ if(armed) disarm(false); else armZone(); });
+  setBtn();
 })();
 </script>
 

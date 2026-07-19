@@ -87,6 +87,28 @@ app = Flask(__name__,
             static_folder=os.path.join(_RES, 'static'))
 
 
+# --- CSRF / cross-origin guard (security) ---
+# The backend serves ONLY the local pywebview UI and is bound to 127.0.0.1, but a malicious web page
+# the user visits in a normal browser can still reach http://127.0.0.1:<port>/… . Reject any
+# state-changing request whose Origin is a different site, so such a page can't drive teleport /
+# device / tunnel endpoints. Same-origin (loopback) requests and header-less local tools pass; the
+# OAuth callback is a GET and is unaffected.
+_LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1", "[::1]")
+
+
+@app.before_request
+def _origin_guard():
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return None
+    origin = request.headers.get("Origin")
+    if origin:
+        from urllib.parse import urlparse
+        host = (urlparse(origin).hostname or "")
+        if host not in _LOOPBACK_HOSTS:
+            return ("forbidden", 403)
+    return None
+
+
 # Optional Google Maps API key powering the Street View teleport panel. Resolved (in order):
 #   1. the WANDER_MAPS_KEY environment variable, or
 #   2. data/config.json  ->  {"google_maps_key": "..."}  (gitignored; bundled at build time)
@@ -104,6 +126,27 @@ def _load_maps_key():
         return ''
 
 GOOGLE_MAPS_KEY = _load_maps_key()
+
+
+# Optional Google OAuth "Desktop app" client for native system-browser + PKCE sign-in.
+# Resolved from WANDER_GOOGLE_DESKTOP_CLIENT_ID / _SECRET env, or data/config.json
+# (google_desktop_client_id / google_desktop_client_secret). When UNSET the app falls back to
+# the Firebase popup/redirect flow (unchanged), so sign-in keeps working with zero config.
+def _load_google_desktop_oauth():
+    import json as _json
+    cid = os.environ.get('WANDER_GOOGLE_DESKTOP_CLIENT_ID', '').strip()
+    csecret = os.environ.get('WANDER_GOOGLE_DESKTOP_CLIENT_SECRET', '').strip()
+    if not cid:
+        try:
+            with open(os.path.join(_RES, 'data', 'config.json'), 'r', encoding='utf-8') as f:
+                cfg = _json.load(f)
+            cid = str(cfg.get('google_desktop_client_id', '')).strip()
+            csecret = str(cfg.get('google_desktop_client_secret', '')).strip()
+        except Exception:
+            pass
+    return cid, csecret
+
+GOOGLE_DESKTOP_CLIENT_ID, GOOGLE_DESKTOP_CLIENT_SECRET = _load_google_desktop_oauth()
 
 # Define constants
 # Get the home directory of the current user
@@ -135,7 +178,7 @@ APP_VERSION_NUMBER = "1.0.0"
 APP_VERSION_TYPE = "standard"
 # Single source of truth for the desktop app version used by the /update-check
 # route. Bump WANDER_VERSION here AND version in wander-site desktop.json each release.
-WANDER_VERSION = "1.15.0"
+WANDER_VERSION = "1.16.0"
 terminate_tunnel_thread = False
 terminate_location_thread = False
 location_threads = []
@@ -1132,6 +1175,197 @@ _joystick = {"lat": None, "lng": None, "heading": 0.0, "speed_mps": 1.4, "moving
 # teleport ease from where we currently are instead of snapping — see _glide_samples.
 _last_fix = {"lat": None, "lng": None}
 
+# ---- Route recorder (record → replay) ----
+# When armed, every fix actually driven through _pump.drive() is captured with the real
+# time gap since the previous fix, so a replay reproduces BOTH the path AND the pace the
+# user drove — joystick steering, routes, and teleport glides all funnel through drive().
+# There is no real GPS to record on desktop (the tunnel is write-only), so "record a
+# route" here means "record the path you drive." Capped so a long session can't grow
+# memory without bound.
+_recorder = {"on": False, "pts": [], "last_t": None}
+_recorder_lock = threading.Lock()
+RECORDER_MAX_POINTS = 20000
+
+
+def _record_fix(lat, lng):
+    """Append (lat, lng, dt-since-prev) if recording is armed. Called from the pump for
+    every driven fix. Never records a replay (mode == 'replay') so replays aren't re-taped."""
+    if not _recorder["on"] or _move_state.get("mode") == "replay":
+        return
+    now = time.time()
+    with _recorder_lock:
+        if not _recorder["on"]:
+            return
+        last_t = _recorder["last_t"]
+        dt = 0.0 if last_t is None else max(0.0, now - last_t)
+        _recorder["last_t"] = now
+        if len(_recorder["pts"]) < RECORDER_MAX_POINTS:
+            _recorder["pts"].append([round(lat, 7), round(lng, 7), round(dt, 3)])
+
+
+# ---- Geofence auto-stop ("resume real GPS on arrival") ----
+# Desktop has no real GPS to READ, so a geofence here means: when the SIMULATED position
+# reaches an armed zone, clear the simulation so the iPhone falls back to its OWN real GPS.
+# The check runs in the pump for every driven fix; on a hit it clears + ends the stream.
+_geofence = {"on": False, "zones": [], "hit": None}
+_geofence_lock = threading.Lock()
+
+
+def _geofence_hit(lat, lng):
+    """Return the first armed zone the point is inside, else None."""
+    if not _geofence["on"]:
+        return None
+    with _geofence_lock:
+        zones = list(_geofence["zones"])
+    for z in zones:
+        try:
+            if _haversine_m(lat, lng, z["lat"], z["lng"]) <= float(z.get("radius_m", 80)):
+                return z
+        except (KeyError, TypeError, ValueError):
+            continue
+    return None
+
+
+# ---- Backend scheduler (fires while the app RUNS, independent of the page) ----
+# The client sends a RESOLVED target (concrete coords/points) + a start/end minute window.
+# A background thread evaluates the window every ~20s and fires/stops the spoof SERVER-side,
+# so it works even when the map page is minimised or reloaded — unlike the old client-only
+# timer. The schedule is persisted to a writable user dir so it survives an app restart
+# (it can't fire while the app is fully quit — desktop spoofing needs the app running — but
+# it re-arms automatically on the next launch).
+_scheduler = {"on": False, "target": None, "start": None, "end": None, "phase": None}
+_scheduler_lock = threading.Lock()
+_SCHED_DIR = os.path.join(os.path.expanduser('~'), '.wander')
+_SCHED_FILE = os.path.join(_SCHED_DIR, 'schedule.json')
+
+
+def _sched_save():
+    import json as _json
+    try:
+        os.makedirs(_SCHED_DIR, exist_ok=True)
+        with _scheduler_lock:
+            data = {k: _scheduler[k] for k in ("on", "target", "start", "end")}
+        with open(_SCHED_FILE, 'w', encoding='utf-8') as f:
+            _json.dump(data, f)
+    except Exception as e:
+        logger.error(f"schedule save error: {e}")
+
+
+def _sched_load():
+    import json as _json
+    try:
+        with open(_SCHED_FILE, 'r', encoding='utf-8') as f:
+            data = _json.load(f)
+        with _scheduler_lock:
+            _scheduler["target"] = data.get("target")
+            _scheduler["start"] = data.get("start")
+            _scheduler["end"] = data.get("end")
+            _scheduler["on"] = bool(data.get("on")) and _scheduler["target"] is not None
+            _scheduler["phase"] = None
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        logger.error(f"schedule load error: {e}")
+
+
+def _in_window(now_min, s, e):
+    """Is now_min inside [s, e)? Handles overnight windows (e <= s) that wrap midnight."""
+    if s == e:
+        return True
+    return (now_min >= s and now_min < e) if s < e else (now_min >= s or now_min < e)
+
+
+def _sched_fire_start(target):
+    """Start the scheduled spoof server-side (spot hold or looping route)."""
+    kind = (target or {}).get("kind")
+    if kind == "spot":
+        try:
+            lat, lng = float(target["lat"]), float(target["lng"])
+        except (KeyError, TypeError, ValueError):
+            return False
+
+        def nxt():
+            return _jitter(lat, lng, True, None)
+        _start_stream(nxt, "schedule")
+        return True
+    if kind == "loop":
+        pts = []
+        for p in target.get("pts", []):
+            try:
+                pts.append((float(p[0]), float(p[1])))
+            except (TypeError, ValueError, IndexError):
+                continue
+        if len(pts) < 2:
+            return False
+        samples = _build_realistic_path(pts, 1.4, 1.0, 'once')
+        if not samples:
+            return False   # empty path -> starting the stream would IndexError and kill the pump
+        idx = {"i": 0}
+
+        def nxt():
+            i = idx["i"]
+            if i >= len(samples):
+                idx["i"] = 0
+                i = 0
+            smp = samples[i]
+            idx["i"] = i + 1
+            j = _jitter(smp[0], smp[1], True, None)
+            return (j[0], j[1], smp[2]) if len(smp) > 2 else j
+        _start_stream(nxt, "schedule")
+        return True
+    return False
+
+
+_sched_eval_lock = threading.Lock()
+
+
+def _sched_evaluate_once():
+    """One window check: start on the leading edge, revert on the trailing edge. Serialized with
+    _sched_eval_lock so the /schedule/set endpoint and the loop thread can't double-fire (check-then-
+    act race)."""
+    import datetime
+    with _sched_eval_lock:
+        with _scheduler_lock:
+            on = _scheduler["on"]
+            target = _scheduler["target"]
+            s = _scheduler["start"]
+            e = _scheduler["end"]
+            phase = _scheduler["phase"]
+        if not (on and target is not None and s is not None and e is not None):
+            return
+        now = datetime.datetime.now()
+        nm = now.hour * 60 + now.minute
+        want = _in_window(nm, s, e)
+        # "running" only counts if the spoof pump is ACTUALLY alive. A fire that died because no
+        # device was connected must be retried on the next tick, not left stuck as 'running' forever.
+        running = (phase == 'running' and _move_thread is not None and _move_thread.is_alive()
+                   and _move_state.get("mode") == "schedule")
+        if want and not running:
+            if _sched_fire_start(target):
+                with _scheduler_lock:
+                    _scheduler["phase"] = 'running'
+                logger.info("scheduler: entered window -> spoof started")
+        elif not want and phase == 'running':
+            try:
+                # stop_location() is a Flask view: its error path calls jsonify(), which needs an app
+                # context this background thread otherwise lacks (raised RuntimeError -> never cleared).
+                with app.app_context():
+                    stop_location()   # full stop + clear -> device resumes real GPS
+            except Exception as ex:
+                logger.error(f"scheduler stop error: {ex}")
+            with _scheduler_lock:
+                _scheduler["phase"] = 'idle'
+            logger.info("scheduler: left window -> reverted to real GPS")
+
+
+def _scheduler_loop():
+    while True:
+        try:
+            _sched_evaluate_once()
+        except Exception as ex:
+            logger.error(f"scheduler loop error: {ex}")
+        time.sleep(20)
+
 # ---- Smooth long-jump glide (anti impossible-jump) tuning ----
 # A teleport farther than SMOOTH_JUMP_THRESHOLD_M from the current spoofed point is
 # played as a fast, continuous great-circle glide instead of an instant hop, so apps
@@ -1436,6 +1670,21 @@ async def _pump(get_next):
                 # Remember the true (pre-coarse) point so a later teleport can glide
                 # from here instead of snapping — see _glide_samples / wander_teleport.
                 _last_fix["lat"], _last_fix["lng"] = lat, lng
+                # Capture the driven path (with real pacing) when the recorder is armed.
+                _record_fix(lat, lng)
+                # Geofence auto-stop: once the simulated position reaches an armed zone,
+                # clear the sim (device resumes its REAL GPS) and end the stream.
+                _gz = _geofence_hit(lat, lng)
+                if _gz is not None:
+                    try:
+                        sim.clear()
+                    except Exception as e:
+                        logger.error(f"geofence clear error: {e}")
+                    with _geofence_lock:
+                        _geofence["hit"] = {"name": _gz.get("name"), "lat": _gz["lat"], "lng": _gz["lng"]}
+                        _geofence["on"] = False
+                    _move_stop.set()
+                    break
                 # Coarse privacy shift is applied to the REPORTED coordinate only; the
                 # canonical fix stored above (and the movement math) stay exact.
                 rlat, rlng = _apply_coarse(lat, lng)
@@ -1619,7 +1868,10 @@ def multi_status():
 @app.route('/wander/teleport', methods=['POST'])
 def wander_teleport():
     d = request.get_json(force=True) or {}
-    lat, lng = float(d['lat']), float(d['lng'])
+    try:
+        lat, lng = float(d['lat']), float(d['lng'])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"ok": False, "error": "bad coordinates"}), 400
     fluc = bool(d.get('fluctuate'))
     jm = d.get('jitter_m')
     # Smooth long-jump glide (anti impossible-jump): default on; the client can opt out
@@ -1653,7 +1905,10 @@ def wander_teleport():
 @app.route('/wander/route', methods=['POST'])
 def wander_route():
     d = request.get_json(force=True) or {}
-    pts = [(float(p[0]), float(p[1])) for p in d['points']]
+    try:
+        pts = [(float(p[0]), float(p[1])) for p in d['points']]
+    except (KeyError, TypeError, ValueError, IndexError):
+        return jsonify({"ok": False, "error": "bad points"}), 400
     speed = float(d.get('speed_mps', 1.4))
     loop = d.get('loop', 'once')              # once | round | loop
     realistic = bool(d.get('realistic'))
@@ -1709,7 +1964,10 @@ def wander_route():
 @app.route('/wander/jump', methods=['POST'])
 def wander_jump():
     d = request.get_json(force=True) or {}
-    seq = [(float(p[0]), float(p[1])) for p in d['points']]
+    try:
+        seq = [(float(p[0]), float(p[1])) for p in d['points']]
+    except (KeyError, TypeError, ValueError, IndexError):
+        return jsonify({"ok": False, "error": "bad points"}), 400
     auto = bool(d.get('auto_cooldown'))
     fluc = bool(d.get('fluctuate'))
     jm = d.get('jitter_m')
@@ -1766,6 +2024,281 @@ def wander_joystick_dir():
     if 'moving' in d:
         _joystick["moving"] = bool(d['moving'])
     return jsonify({"ok": True, "heading": _joystick["heading"], "moving": _joystick["moving"]})
+
+
+@app.route('/wander/record/start', methods=['POST'])
+def wander_record_start():
+    """Arm the recorder. From now on every driven fix (joystick/route/teleport) is taped
+    with its real pacing until /wander/record/stop."""
+    with _recorder_lock:
+        _recorder["on"] = True
+        _recorder["pts"] = []
+        _recorder["last_t"] = None
+    return jsonify({"ok": True})
+
+
+@app.route('/wander/record/stop', methods=['POST'])
+def wander_record_stop():
+    """Disarm and return the recorded path so the client can name + save it."""
+    with _recorder_lock:
+        _recorder["on"] = False
+        pts = list(_recorder["pts"])
+    seconds = round(sum(p[2] for p in pts), 1)
+    return jsonify({"ok": True, "points": pts, "count": len(pts), "seconds": seconds})
+
+
+@app.route('/wander/record/status', methods=['GET'])
+def wander_record_status():
+    with _recorder_lock:
+        return jsonify({"on": _recorder["on"], "count": len(_recorder["pts"])})
+
+
+@app.route('/wander/record/replay', methods=['POST'])
+def wander_record_replay():
+    """Replay a saved recording, honouring its per-fix pacing. Accepts points as
+    [[lat,lng,dt], ...] (preferred) or [[lat,lng], ...] (defaults to ~1s spacing)."""
+    d = request.get_json(force=True) or {}
+    raw = d.get('points') or []
+    seq = []
+    for p in raw:
+        try:
+            lat = float(p[0]); lng = float(p[1])
+            dt = float(p[2]) if len(p) > 2 else 1.0
+        except (TypeError, ValueError, IndexError):
+            continue
+        seq.append((lat, lng, dt))
+    if not seq:
+        return jsonify({"ok": False, "error": "no points"}), 400
+    loop = d.get('loop', 'once')           # once | loop
+    fluc = bool(d.get('fluctuate'))
+    jm = d.get('jitter_m')
+    _move_state["total"] = len(seq)
+    idx = {"i": 0}
+
+    def nxt():
+        i = idx["i"]
+        if i >= len(seq):
+            if loop == 'loop':
+                idx["i"] = 0
+                i = 0
+            else:
+                last = seq[-1]
+                return _jitter(last[0], last[1], fluc, jm)   # hold at the end
+        lat, lng, dt = seq[i]
+        idx["i"] = i + 1
+        _move_state["point"] = idx["i"]
+        j = _jitter(lat, lng, fluc, jm)
+        # Cap a single gap so an accidental long pause mid-recording can't freeze replay.
+        return (j[0], j[1], min(max(0.0, dt), 10.0))
+    _start_stream(nxt, "replay")
+    return jsonify({"ok": True, "points": len(seq),
+                    "seconds": round(sum(s[2] for s in seq), 1)})
+
+
+@app.route('/wander/geofence/set', methods=['POST'])
+def wander_geofence_set():
+    """Arm one or more auto-stop zones. When a running route/joystick's simulated position
+    enters a zone, the simulation is cleared so the device resumes its real GPS."""
+    d = request.get_json(force=True) or {}
+    raw = d.get('zones') or []
+    zones = []
+    for z in raw:
+        try:
+            zones.append({"name": str(z.get('name') or 'Zone')[:40],
+                          "lat": float(z['lat']), "lng": float(z['lng']),
+                          "radius_m": max(20.0, min(50000.0, float(z.get('radius_m', 80))))})
+        except (KeyError, TypeError, ValueError):
+            continue
+    with _geofence_lock:
+        _geofence["zones"] = zones
+        _geofence["on"] = bool(d.get('on', True)) and len(zones) > 0
+        _geofence["hit"] = None
+        on = _geofence["on"]
+    return jsonify({"ok": True, "on": on, "count": len(zones)})
+
+
+@app.route('/wander/geofence/get', methods=['GET'])
+def wander_geofence_get():
+    with _geofence_lock:
+        return jsonify({"on": _geofence["on"], "zones": _geofence["zones"], "hit": _geofence["hit"]})
+
+
+@app.route('/wander/geofence/clear', methods=['POST'])
+def wander_geofence_clear():
+    with _geofence_lock:
+        _geofence["on"] = False
+        _geofence["zones"] = []
+        _geofence["hit"] = None
+    return jsonify({"ok": True})
+
+
+@app.route('/wander/schedule/set', methods=['POST'])
+def wander_schedule_set():
+    """Arm a background schedule. `target` is a resolved spoof descriptor
+    ({kind:'spot',lat,lng,name} or {kind:'loop',pts,name}); start/end are minutes-since-midnight."""
+    d = request.get_json(force=True) or {}
+    target = d.get('target')
+    if not isinstance(target, dict) or target.get('kind') not in ('spot', 'loop'):
+        return jsonify({"ok": False, "error": "target required"}), 400
+    try:
+        s = int(d['start']) % 1440
+        e = int(d['end']) % 1440
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"ok": False, "error": "start/end minutes required"}), 400
+    with _scheduler_lock:
+        _scheduler["target"] = target
+        _scheduler["start"] = s
+        _scheduler["end"] = e
+        _scheduler["on"] = True
+        _scheduler["phase"] = None
+    _sched_save()
+    _sched_evaluate_once()   # fire immediately if we're already inside the window
+    with _scheduler_lock:
+        phase = _scheduler["phase"]
+    return jsonify({"ok": True, "on": True, "phase": phase})
+
+
+@app.route('/wander/schedule/get', methods=['GET'])
+def wander_schedule_get():
+    with _scheduler_lock:
+        return jsonify({k: _scheduler[k] for k in ("on", "target", "start", "end", "phase")})
+
+
+@app.route('/wander/schedule/clear', methods=['POST'])
+def wander_schedule_clear():
+    with _scheduler_lock:
+        was_running = (_scheduler["phase"] == 'running')
+        _scheduler["on"] = False
+        _scheduler["target"] = None
+        _scheduler["start"] = None
+        _scheduler["end"] = None
+        _scheduler["phase"] = None
+    _sched_save()
+    if was_running:
+        try:
+            stop_location()
+        except Exception:
+            pass
+    return jsonify({"ok": True})
+
+
+# ---- Native Google sign-in (system browser + OAuth2 loopback + PKCE) ----
+# Standard installed-app flow: open the user's REAL browser to Google, receive the code on a
+# loopback redirect back to THIS Flask server, exchange it (with the PKCE verifier) for an
+# id_token, and hand that to the frontend to finish a Firebase signInWithCredential. Google
+# blocks OAuth inside embedded webviews — which is exactly why the pywebview popup is flaky —
+# so the system browser avoids that entirely. Gated on GOOGLE_DESKTOP_CLIENT_ID: when unset,
+# the frontend uses the Firebase popup/redirect fallback and this code path is never hit.
+_oauth_sessions = {}
+_oauth_lock = threading.Lock()
+_GOOGLE_AUTH_EP = "https://accounts.google.com/o/oauth2/v2/auth"
+_GOOGLE_TOKEN_EP = "https://oauth2.googleapis.com/token"
+_OAUTH_DONE_PAGE = ("<!doctype html><meta charset='utf-8'><title>Wander</title>"
+                    "<body style='font:16px -apple-system,Segoe UI,Roboto,sans-serif;"
+                    "text-align:center;padding:60px;color:#16202b'>{msg}</body>")
+
+
+def _pkce_pair():
+    import secrets as _secrets, hashlib, base64
+    verifier = base64.urlsafe_b64encode(_secrets.token_bytes(48)).rstrip(b'=').decode('ascii')
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode('ascii')).digest()).rstrip(b'=').decode('ascii')
+    return verifier, challenge
+
+
+@app.route('/auth/google/config', methods=['GET'])
+def auth_google_config():
+    return jsonify({"enabled": bool(GOOGLE_DESKTOP_CLIENT_ID)})
+
+
+@app.route('/auth/google/start', methods=['POST'])
+def auth_google_start():
+    import secrets as _secrets, webbrowser, urllib.parse
+    if not GOOGLE_DESKTOP_CLIENT_ID:
+        return jsonify({"ok": False, "error": "not_configured"})
+    state = _secrets.token_urlsafe(24)
+    verifier, challenge = _pkce_pair()
+    redirect_uri = request.host_url.rstrip('/') + '/auth/google/callback'
+    now = time.time()
+    with _oauth_lock:
+        # Reap abandoned / timed-out sign-ins (never completed the loopback) so the PKCE session
+        # dict can't grow without bound over a long-running app session.
+        for k in [k for k, v in _oauth_sessions.items() if now - v.get("created", now) > 600]:
+            _oauth_sessions.pop(k, None)
+        _oauth_sessions[state] = {"verifier": verifier, "redirect_uri": redirect_uri,
+                                  "id_token": None, "error": None, "created": now}
+    params = {
+        "client_id": GOOGLE_DESKTOP_CLIENT_ID,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+        "state": state,
+        "prompt": "select_account",
+    }
+    url = _GOOGLE_AUTH_EP + '?' + urllib.parse.urlencode(params)
+    try:
+        webbrowser.open(url)
+    except Exception as e:
+        logger.error(f"oauth browser open error: {e}")
+        return jsonify({"ok": False, "error": "browser_open_failed"})
+    return jsonify({"ok": True, "state": state})
+
+
+@app.route('/auth/google/callback', methods=['GET'])
+def auth_google_callback():
+    state = request.args.get('state', '')
+    code = request.args.get('code', '')
+    err = request.args.get('error', '')
+    with _oauth_lock:
+        sess = _oauth_sessions.get(state)
+    if not sess:
+        return _OAUTH_DONE_PAGE.format(msg="<h2>Session expired</h2><p>Close this tab and try again in Wander.</p>"), 400
+    if err or not code:
+        with _oauth_lock:
+            sess["error"] = err or "no_code"
+        return _OAUTH_DONE_PAGE.format(msg="<h2>Sign-in cancelled</h2><p>You can close this tab and return to Wander.</p>"), 400
+    try:
+        data = {
+            "client_id": GOOGLE_DESKTOP_CLIENT_ID,
+            "code": code,
+            "code_verifier": sess["verifier"],
+            "grant_type": "authorization_code",
+            "redirect_uri": sess["redirect_uri"],
+        }
+        if GOOGLE_DESKTOP_CLIENT_SECRET:
+            data["client_secret"] = GOOGLE_DESKTOP_CLIENT_SECRET
+        resp = requests.post(_GOOGLE_TOKEN_EP, data=data, timeout=20)
+        tok = resp.json()
+        id_token = tok.get("id_token")
+        if not id_token:
+            raise ValueError(tok.get("error_description") or tok.get("error") or "no_id_token")
+        with _oauth_lock:
+            sess["id_token"] = id_token
+        return _OAUTH_DONE_PAGE.format(msg="<h2>Signed in &#10003;</h2><p>You can close this tab and return to Wander.</p>"), 200
+    except Exception as e:
+        logger.error(f"oauth token exchange error: {e}")
+        with _oauth_lock:
+            sess["error"] = "exchange_failed"
+        return _OAUTH_DONE_PAGE.format(msg="<h2>Sign-in failed</h2><p>Close this tab and try again in Wander.</p>"), 400
+
+
+@app.route('/auth/google/result', methods=['GET'])
+def auth_google_result():
+    """Frontend polls this after /start; returns the id_token once the loopback callback
+    completes (one-shot), an error, or pending."""
+    state = request.args.get('state', '')
+    with _oauth_lock:
+        sess = _oauth_sessions.get(state)
+        if not sess:
+            return jsonify({"error": "unknown_state"})
+        if sess.get("id_token"):
+            _oauth_sessions.pop(state, None)
+            return jsonify({"id_token": sess["id_token"]})
+        if sess.get("error"):
+            _oauth_sessions.pop(state, None)
+            return jsonify({"error": sess["error"]})
+    return jsonify({"pending": True})
 
 
 @app.route('/wander/cooldown', methods=['GET'])
@@ -2495,7 +3028,7 @@ def _open_window_loading(port):
 def _run_window_inprocess(port):
     """Serve Flask + open the window in ONE process (already-root / non-mac / fallback)."""
     def _serve():
-        app.run(debug=False, use_reloader=False, port=port, host='0.0.0.0', threaded=True)
+        app.run(debug=False, use_reloader=False, port=port, host='127.0.0.1', threaded=True)
     try:
         threading.Thread(target=_serve, daemon=True).start()
         _open_window(port)
@@ -2503,6 +3036,13 @@ def _run_window_inprocess(port):
         logger.error(f"Native window unavailable ({e}); opening in browser instead")
         open_browser()
         _serve()
+
+
+# Restore any saved schedule and start the background evaluator. Runs at import so it works
+# in every entry path (native window, browser fallback, headless serve). Defined here, after
+# all the helpers it fires (_start_stream, _jitter, _build_realistic_path, stop_location).
+_sched_load()
+threading.Thread(target=_scheduler_loop, daemon=True).start()
 
 
 if __name__ == '__main__':
@@ -2539,7 +3079,7 @@ if __name__ == '__main__':
         if getattr(args, 'parent_pid', None):
             _start_parent_watchdog(args.parent_pid)
         logger.info("--no-browser: serving Flask only, no app window")
-        app.run(debug=False, use_reloader=False, port=chosen_port, host='0.0.0.0', threaded=True)
+        app.run(debug=False, use_reloader=False, port=chosen_port, host='127.0.0.1', threaded=True)
 
     elif sys.platform == 'darwin' and hasattr(os, 'geteuid') and os.geteuid() != 0:
         # Double-clicked on macOS without root: open the window as the user, and start the
