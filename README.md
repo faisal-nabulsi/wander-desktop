@@ -8,12 +8,12 @@
 
 ### Put your iPhone anywhere on Earth — from your Mac or PC. No jailbreak.
 
-Teleport with a click, walk with a live joystick, or drive a full multi-stop route at realistic speed — all from a clean desktop map. A real free trial and one honest lifetime price — the affordable alternative to paid tools like **iMyFone AnyTo** and **Tenorshare iAnyGo**.
+Teleport with a click, walk with a live joystick, or drive a full multi-stop route at realistic speed — all from a clean desktop map. A free plan that refills, and Pro from $3.99 a month — a lower-priced alternative to tools like **iMyFone AnyTo** and **Tenorshare iAnyGo**.
 
 <br/>
 
 [![Website](https://img.shields.io/badge/🌐_Website-wanderspoofer.com-4C8BF5?style=for-the-badge)](https://wanderspoofer.com)
-[![Download](https://img.shields.io/badge/⬇️_Download-Free_trial-22C55E?style=for-the-badge)](https://wanderspoofer.com/#download)
+[![Download](https://img.shields.io/badge/⬇️_Download-Free_plan-22C55E?style=for-the-badge)](https://wanderspoofer.com/#download)
 [![Discord](https://img.shields.io/badge/💬_Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/gfHdsRXUVA)
 
 ![Platform](https://img.shields.io/badge/platform-macOS_·_Windows-lightgrey?style=flat-square)
@@ -62,7 +62,7 @@ Teleport with a click, walk with a live joystick, or drive a full multi-stop rou
 - 🔓 **No jailbreak.** Works on a normal, up-to-date iPhone.
 - 💻 **Cross-platform** — macOS and Windows.
 
-Start with a **free trial**. **Wander Pro** unlocks the movement modes (joystick, routes, and more) and the AI features.
+Start on the **free plan**: 1 teleport every day, plus 15 minutes of joystick and 3 routes every month. **Wander Pro** ($3.99 a month, $36 a year, or $80 once) makes them unlimited and unlocks the other movement modes and the AI features.
 
 > **Mobile-only:** geofence auto-revert, scheduling (be somewhere during set hours), and downloadable offline maps live on the **iPhone & Android** apps — the desktop drives a tethered phone, so those "moving device" features don't apply here. See the whole family at [wanderspoofer.com](https://wanderspoofer.com).
 
@@ -70,25 +70,25 @@ Start with a **free trial**. **Wander Pro** unlocks the movement modes (joystick
 
 ---
 
-## ⚖️ Wander vs. the paid apps
+## ⚖️ Wander vs. iMyFone AnyTo
 
-| | **Wander Desktop** | iMyFone AnyTo | Tenorshare iAnyGo |
-|---|:---:|:---:|:---:|
-| **Real free trial** | ✅ | ⚠️ | ⚠️ |
-| **Price** | ✅ **$80 lifetime** | 💰 ~$120/yr | 💰 ~$120/yr |
-| **No jailbreak** | ✅ | ✅ | ✅ |
-| **Teleport** | ✅ | ✅ | ✅ |
-| **Live joystick** | ✅ | ✅ | ✅ |
-| **Multi-stop routes** | ✅ | ✅ | ✅ |
-| **Transport modes + flight planner** | ✅ | ❌ | ❌ |
-| **PoGo mode + cooldown** | ✅ | ⚠️ | ⚠️ |
-| **Multi-device (beta)** | ✅ | ❌ | ❌ |
-| **GPX & KML import / export** | ✅ | ⚠️ | ⚠️ |
-| **macOS + Windows** | ✅ | ⚠️ | ⚠️ |
+| | **Wander Desktop** | iMyFone AnyTo (VIP plan) |
+|---|:---:|:---:|
+| **Monthly** | **$3.99** | $14.99 |
+| **Yearly** | **$36** | $59.99 |
+| **Lifetime** | **$80** | $89.99 |
+| **Free use** | Free plan that refills: 1 teleport a day, plus 15 joystick minutes and 3 routes a month | Limited free trial |
+| **No jailbreak** | ✅ | ✅ |
+| **Teleport, joystick, multi-stop routes** | ✅ | ✅ |
+| **Open source** | ✅ iPhone and desktop apps | ❌ |
+
+AnyTo prices are its VIP plan as listed on [iMyFone's store](https://www.imyfone.com/location-changer/purchase/) on 15 November 2026; its SVIP plan costs more. Prices change often, so check both stores.
+
+Wander Desktop also includes transport modes with a flight planner, PoGo mode with a cooldown timer, multi-device (beta), GPX & KML import and export, and builds for both macOS and Windows.
 
 ---
 
-## ⬇️ Get it — in 2 minutes
+## ⬇️ Get it
 
 ### 👉 [**Download at wanderspoofer.com**](https://wanderspoofer.com/#download)
 
@@ -145,7 +145,7 @@ A local **Flask** server hosts a **Leaflet** map (`src/templates/map.html`) and 
 
 ## 🤔 Why Wander?
 
-iAnyGo, AnyTo, and the rest work, but they charge a yearly subscription and hand you a token trial. Wander Desktop gives you a **real free trial** and one honest **$80 lifetime** license that also unlocks iPhone, Android and the other desktop build — teleport, joystick, routes, PoGo Mode and multi-device from your Mac or PC, no jailbreak and no monthly bill.
+iAnyGo, AnyTo, and the rest work. Wander costs less — **$3.99 a month, $36 a year, or $80 once** — and the same account also unlocks iPhone, Android and the other desktop build: teleport, joystick, routes, PoGo Mode and multi-device from your Mac or PC, with no jailbreak. Its **free plan** refills every day and month.
 
 ---
 
