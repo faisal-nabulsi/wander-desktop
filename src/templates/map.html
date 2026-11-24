@@ -2268,48 +2268,6 @@ function populateDeviceList() {
 
 
 
-    // Define an asynchronous function to update DynamoDB
-    async function updateDynamoDB(selectedDeviceIdentifier, selectedDeviceVersion, selectedDeviceName, selectedDeviceClass, selectedDevicePlatform, appVersionNum, appType, selectedDeviceConnType, SelectedDeviceWifiState, selectedDeviceCountry) {
-
-        const apiUrl = 'https://api.wander.me/';
-
-        try {
-            const response = await fetch(apiUrl + selectedDeviceIdentifier, {
-                mode: 'no-cors',
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    // Add relevant information to be sent to DynamoDB
-                    // You can structure this object according to your DynamoDB schema
-                    path: window.location.pathname,
-                    version: selectedDeviceVersion,
-                    deviceName: selectedDeviceName,
-                    deviceClass: selectedDeviceClass,
-                    platform: selectedDevicePlatform,
-                    appType: appType,
-                    appVersion: appVersionNum,
-                    connType: selectedDeviceConnType,
-                    wifiState: SelectedDeviceWifiState,
-                    country: selectedDeviceCountry,
-
-
-
-                }),
-            });
-
-            if (!response.ok) {
-
-            }
-        } catch (error) {
-
-        }
-    }
-
-
-
-
     // Connect Device Function
 // Connect Device Function
 function connectDevice() {
@@ -2359,8 +2317,6 @@ function connectDevice() {
 <!--    console.log('wifi address:', selectedDeviceWifiAddress);-->
 
 
-    // Call the function to update DynamoDB
-    updateDynamoDB(selectedDeviceIdentifier, selectedDeviceVersion, selectedDeviceName, selectedDeviceClass, selectedDevicePlatform, appVersionNum, appType, selectedDeviceConnType, SelectedDeviceWifiState, selectedDeviceCountry);
 
     if (connectTextElement) {
         connectTextElement.innerText = "Connecting, please wait...";

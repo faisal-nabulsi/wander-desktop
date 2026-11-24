@@ -163,13 +163,14 @@ error_message = None
 sudo_message = ""
 captured_output = None
 GITHUB_REPO = 'faisal-nabulsi/wander-desktop'
-CURRENT_VERSION_FILE = 'CURRENT_VERSION'
 BROADCAST_FILE = 'BROADCAST'
-APP_VERSION_NUMBER = "1.0.0"
-APP_VERSION_TYPE = "standard"
 # Single source of truth for the desktop app version used by the /update-check
 # route. Bump WANDER_VERSION here AND version in wander-site desktop.json each release.
-WANDER_VERSION = "1.17.0"
+WANDER_VERSION = "1.17.1"
+# Shown in the footer and About panel. Kept equal to WANDER_VERSION so the app
+# reports its real version (it used to say "1.0.0").
+APP_VERSION_NUMBER = WANDER_VERSION
+APP_VERSION_TYPE = "standard"
 terminate_tunnel_thread = False
 terminate_location_thread = False
 location_threads = []
@@ -2651,34 +2652,13 @@ def usage_session():
     return '', 204
 
 
-def get_github_version():
-    try:
-        # Make a request to the GitHub API to get the content of CURRENT_VERSION file
-        url = f'https://raw.githubusercontent.com/{GITHUB_REPO}/main/{CURRENT_VERSION_FILE}'
-        response = requests.get(url, timeout=3)
-
-        # Defensive: a missing file returns 200-with-"404: Not Found" body on
-        # some hosts, or a real error status. Never surface junk as a version.
-        if response.status_code != 200:
-            return None
-
-        # Parse the content of the file
-        github_version = response.text.strip()
-
-
-        return github_version
-    except requests.RequestException as e:
-
-        return None
-
-
 def get_github_broadcast():
     try:
-        # Make a request to the GitHub API to get the content of CURRENT_VERSION file
+        # Fetch the BROADCAST text file (a one-line notice shown above the map)
         url = f'https://raw.githubusercontent.com/{GITHUB_REPO}/main/{BROADCAST_FILE}'
         logger.error(f"Github URL: {url}")
 
-        response = requests.get(url, verify=False, timeout=3)
+        response = requests.get(url, timeout=3)
         logger.error(f"github response: {response}")
 
         # If the broadcast file is missing (404) or any non-200 status, the
@@ -2912,10 +2892,8 @@ def exit_app():
 # Values fetched once in the background at startup, so the first page render is INSTANT.
 # (Doing the GitHub / IP calls inside index() made "/" slow on a poor connection, which
 # stalled the loading window's poll and produced "Couldn't start the tunnel".)
-_boot = {'ready': False, 'gh_version': None, 'gh_broadcast': '', 'country': None}
+_boot = {'ready': False, 'gh_broadcast': '', 'country': None}
 def _prefetch_boot():
-    try: _boot['gh_version'] = get_github_version()
-    except Exception: pass
     try: _boot['gh_broadcast'] = get_github_broadcast() or ''
     except Exception: pass
     try: _boot['country'] = get_user_country()
@@ -2933,21 +2911,15 @@ def healthz():
 @app.route('/')
 def index():
     # Read the values prefetched at startup instead of blocking on the network here.
-    github_version = _boot['gh_version']
     github_broadcast = _boot['gh_broadcast']
     user_locale = _boot['country']
     logger.info(f"Current platform: {platform}")
     logger.info(f"App Version = {APP_VERSION_NUMBER}")
 
-    # Compare with the locally hardcoded version
-    if github_version and github_version > APP_VERSION_NUMBER:
-        version_message = f"Update available. New Version is {github_version}"
-
-    elif github_version and github_version < APP_VERSION_NUMBER:
-        version_message = f"Beta Testing. App version is {APP_VERSION_NUMBER} - github is {github_version}"
-
-    else:
-        version_message = None
+    # Update notices come from /update-check (wander-site desktop.json). The old
+    # CURRENT_VERSION comparison is gone: it compared strings and showed a false
+    # "Update available" notice.
+    version_message = None
 
     return render_template('map.html', version_message=version_message, github_broadcast=github_broadcast,
                            user_locale=user_locale, app_version_num=APP_VERSION_NUMBER,
