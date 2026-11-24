@@ -1369,7 +1369,7 @@ def _scheduler_loop():
 # ---- Smooth long-jump glide (anti impossible-jump) tuning ----
 # A teleport farther than SMOOTH_JUMP_THRESHOLD_M from the current spoofed point is
 # played as a fast, continuous great-circle glide instead of an instant hop, so apps
-# that flag an impossible-speed jump (dating apps, Life360) see a fast-but-continuous
+# that flag an impossible-speed jump (dating apps, location-sharing apps) see a fast-but-continuous
 # move. Small jumps stay instant. Mirrors iOS JumpSmoothingDefaults / Android
 # SMOOTH_JUMP_* — glide aims for ~SMOOTH_JUMP_TARGET_SEC, capped at SMOOTH_JUMP_MAX_SEC.
 SMOOTH_JUMP_THRESHOLD_M = 2000.0
