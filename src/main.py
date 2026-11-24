@@ -109,23 +109,14 @@ def _origin_guard():
     return None
 
 
-# Optional Google Maps API key powering the Street View teleport panel. Resolved (in order):
-#   1. the WANDER_MAPS_KEY environment variable, or
-#   2. data/config.json  ->  {"google_maps_key": "..."}  (gitignored; bundled at build time)
-# If neither is set the key stays "" and the Street View UI is hidden — the app works
-# exactly as before, with zero extra network calls.
-def _load_maps_key():
-    env = os.environ.get('WANDER_MAPS_KEY', '').strip()
-    if env:
-        return env
-    try:
-        import json as _json
-        with open(os.path.join(_RES, 'data', 'config.json'), 'r', encoding='utf-8') as f:
-            return str(_json.load(f).get('google_maps_key', '')).strip()
-    except Exception:
-        return ''
-
-GOOGLE_MAPS_KEY = _load_maps_key()
+# NOTE: the Google Maps key is NO LONGER loaded or bundled here. Street View fetches a
+# fresh key at runtime from the Worker (POST /streetview/key), which only returns it to a
+# verified Pro caller under a daily cap and keeps the key server-side (see map.html
+# `wanderStreetViewKey` / `var KEY = null; // never shipped in the app`). Reading the key
+# into this process and handing it to the template shipped an unrestricted key inside the
+# desktop build for no reason — the template never referenced it. Removed so the app
+# ships zero Maps key. Restrict the Worker's GOOGLE_MAPS_KEY secret in Google Cloud
+# (API + quota restrictions) — that key is the one clients actually receive.
 
 
 # Optional Google OAuth "Desktop app" client for native system-browser + PKCE sign-in.
@@ -2561,6 +2552,105 @@ def update_check():
     return jsonify(result)
 
 
+# ---- Anonymous usage statistics (no UI, no prompt, no setting) ----
+# Counts daily active installs and sessions per day. The map page POSTs {"t": "free"|"pro"}
+# here on launch and whenever the window comes back to the front. This process owns the rest
+# because pywebview runs in private mode (the page's localStorage is wiped on every launch),
+# so an id kept by the page would look like a brand-new user each launch.
+#   - iid: a random UUID v4 made once per install and stored in ~/.wander/usage.json. It is
+#     never derived from or linked to an email, Firebase UID, Apple ID, device identifier or
+#     advertising ID. Only {iid, platform, app version, tier} is sent.
+#   - At most one data point per 30 minutes per install; the last-sent time is persisted so
+#     a quick relaunch doesn't count twice.
+#   - Fire-and-forget: one attempt on a daemon thread, 5-second timeout, no retries, every
+#     failure silent and never logged.
+_USAGE_URL = 'https://wander-payments.wanderlocation.workers.dev/metrics/session'
+_USAGE_DIR = os.path.join(os.path.expanduser('~'), '.wander')
+_USAGE_FILE = os.path.join(_USAGE_DIR, 'usage.json')
+_USAGE_MIN_GAP_S = 30 * 60
+_USAGE_TIMEOUT_S = 5
+_USAGE_PLATFORM = {'darwin': 'mac', 'win32': 'windows'}.get(sys.platform)
+_UUID4_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+_usage_lock = threading.Lock()
+_usage_state = {'loaded': False, 'iid': None, 'last': 0.0}
+
+
+def _usage_write_locked():
+    """Atomically persist the install id + last-sent time. False if it can't be written."""
+    import json as _json
+    tmp = _USAGE_FILE + '.tmp'
+    try:
+        os.makedirs(_USAGE_DIR, exist_ok=True)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            _json.dump({'iid': _usage_state['iid'], 'lastSent': _usage_state['last']}, f)
+        os.replace(tmp, _USAGE_FILE)
+        return True
+    except Exception:
+        try:
+            os.remove(tmp)
+        except Exception:
+            pass
+        return False
+
+
+def _usage_load_locked():
+    """Load the install id, creating it once. iid stays None when it can't be stored, so an
+    install whose id would change on every launch is never counted."""
+    if _usage_state['loaded']:
+        return
+    import json as _json, uuid as _uuid
+    try:
+        with open(_USAGE_FILE, 'r', encoding='utf-8') as f:
+            data = _json.load(f)
+        iid = str(data.get('iid') or '').strip().lower()
+        if _UUID4_RE.match(iid):
+            _usage_state['iid'] = iid
+            try:
+                last = float(data.get('lastSent') or 0)
+            except (TypeError, ValueError):
+                last = 0.0
+            _usage_state['last'] = last if last > 0 else 0.0
+    except Exception:
+        pass  # missing or unreadable -> make a fresh id below
+    if not _usage_state['iid']:
+        _usage_state['iid'] = str(_uuid.uuid4())
+        _usage_state['last'] = 0.0
+        if not _usage_write_locked():
+            _usage_state['iid'] = None
+    _usage_state['loaded'] = True
+
+
+def _usage_send(payload):
+    try:
+        requests.post(_USAGE_URL, json=payload, timeout=_USAGE_TIMEOUT_S)
+    except Exception:
+        pass
+
+
+@app.route('/usage/session', methods=['POST'])
+def usage_session():
+    # Same-origin only: the _origin_guard above already rejects cross-site POSTs.
+    body = request.get_json(silent=True)
+    tier = body.get('t') if isinstance(body, dict) else None
+    if tier not in ('free', 'pro'):
+        return '', 400
+    if not _USAGE_PLATFORM:            # only the mac/windows builds report
+        return '', 204
+    now = time.time()
+    with _usage_lock:
+        _usage_load_locked()
+        iid, last = _usage_state['iid'], _usage_state['last']
+        # 0 < last <= now: a last-sent time in the future (clock moved back) doesn't block.
+        if not iid or (0 < last <= now and now - last < _USAGE_MIN_GAP_S):
+            return '', 204
+        _usage_state['last'] = now
+        _usage_write_locked()
+    payload = {'iid': iid, 'p': _USAGE_PLATFORM, 'v': WANDER_VERSION[:32], 't': tier}
+    threading.Thread(target=_usage_send, args=(payload,), daemon=True).start()
+    return '', 204
+
+
 def get_github_version():
     try:
         # Make a request to the GitHub API to get the content of CURRENT_VERSION file
@@ -2862,7 +2952,7 @@ def index():
     return render_template('map.html', version_message=version_message, github_broadcast=github_broadcast,
                            user_locale=user_locale, app_version_num=APP_VERSION_NUMBER,
                            app_version_type=APP_VERSION_TYPE, error_message=error_message, current_platform=platform,
-                           sudo_message=sudo_message, google_maps_key=GOOGLE_MAPS_KEY)
+                           sudo_message=sudo_message)
 
 
 def open_browser():

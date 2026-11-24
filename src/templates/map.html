@@ -5190,8 +5190,9 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
 <!-- ===== Wander Account / Pro entitlement (Firebase, scoped: wacct-) ===== -->
 <!-- Loads the Firebase v10.12.2 modular SDK from the gstatic CDN (same as the -->
 <!-- website). pywebview has internet. Only the PUBLIC web config is embedded. -->
-<!-- Unlock path: onAuthStateChanged -> read Firestore licenses/{uid} (fallback  -->
-<!-- licenses/{lowercased-email}) -> window.wanderSetPro(plan === "pro").          -->
+<!-- Unlock path: onAuthStateChanged -> server-read licenses/{uid} + licenses/{lowercased  -->
+<!-- verified email} -> Pro rule + bounded 7-day cache (see checkPro / resolvePro below)  -->
+<!-- -> window.wanderSetPro(isPro). Re-verified when the window returns to the front.    -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
@@ -5200,7 +5201,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
            signInWithRedirect, getRedirectResult, signInWithCredential,
            getMultiFactorResolver, TotpMultiFactorGenerator }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-  import { getFirestore, doc, getDoc, collection, getDocs, setDoc }
+  import { getFirestore, doc, getDocFromServer, collection, getDocs, setDoc }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   // Public Firebase web config (safe to embed) — same project as wanderspoofer.com.
@@ -5258,18 +5259,144 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   window.wanderAuthState = { signedIn:false, pro:false };
   window.wanderOpenAccount = function(pitch){ setPitch(pitch || ""); showSheet(); };
 
-  // ---- last-known plan cache (per uid) ----
-  // An offline Pro user must never be trial-gated while the Firestore round-trip
-  // is pending or failing. Persist the last resolved plan keyed by uid and apply
-  // a cached "pro" immediately, before/without waiting for Firestore.
-  function planCacheKey(uid){ return "wanderPlan:" + uid; }
-  function cachedPlan(uid){
-    try { return uid ? (localStorage.getItem(planCacheKey(uid)) || null) : null; }
-    catch(e){ return null; }
+  // ---- Pro entitlement + bounded Pro cache (per uid) ----
+  // Rule (same as the Worker, iOS and Android):
+  //   Pro = (plan == "pro" OR lifetime == true) AND NOT (source == "comp" AND expiresAt has passed),
+  //   ORed across licenses/{uid} and licenses/{lowercased email}. The email doc counts only
+  //   when the account's email is verified (Firestore rules refuse to serve it otherwise).
+  // Cache policy:
+  //   • Re-verified on launch / sign-in and whenever the window comes back to the front,
+  //     the foreground re-check at most once every 6 hours.
+  //   • A server read that SUCCEEDS and says not-Pro (including "no such document" on every
+  //     doc read) drops Pro immediately.
+  //   • A read that can't complete (offline, timeout, auth/permission error) keeps a cached
+  //     Pro only while proVerifiedAt (the last server read that said Pro) is under 7 days
+  //     old, and never past a comp's expiresAt. After that the app is free until a read
+  //     succeeds, so a revoked or expired licence can't live on in an offline cache.
+  // pywebview runs in private mode (localStorage is wiped every launch), so in the shipped
+  // app this cache lasts one session; the in-memory copy is primary, localStorage best-effort.
+  const PRO_CACHE_PREFIX    = "wanderProCache:";          // + uid -> {pro, proVerifiedAt, until}
+  const PRO_RECHECK_MS      = 6 * 60 * 60 * 1000;         // foreground re-verify throttle
+  const PRO_GRACE_MS        = 7 * 24 * 60 * 60 * 1000;    // offline grace after the last verified Pro
+  const PRO_RETRY_MS        = 5 * 60 * 1000;              // back-off after a failed re-verify
+  const PRO_READ_TIMEOUT_MS = 15000;                      // a hung read counts as a network error
+  const PRO_CLOCK_SKEW_MS   = 5 * 60 * 1000;              // a proVerifiedAt from the future is ignored
+  let proCacheMem = null;                                 // {uid, pro, proVerifiedAt, until}
+
+  function readProCache(uid){
+    if(!uid) return null;
+    if(proCacheMem && proCacheMem.uid === uid) return proCacheMem;
+    try {
+      const raw = localStorage.getItem(PRO_CACHE_PREFIX + uid);
+      const c = raw ? JSON.parse(raw) : null;
+      if(c && typeof c === "object"){
+        proCacheMem = {
+          uid: uid,
+          pro: c.pro === true,
+          proVerifiedAt: Number(c.proVerifiedAt) || 0,
+          until: (typeof c.until === "number" && isFinite(c.until)) ? c.until : null
+        };
+        return proCacheMem;
+      }
+    } catch(e){ /* unreadable cache = no cache */ }
+    return null;
   }
-  function cachePlan(uid, plan){
+  function writeProCache(uid, entry){
     if(!uid) return;
-    try { localStorage.setItem(planCacheKey(uid), plan); } catch(e){ /* ignore */ }
+    proCacheMem = { uid: uid, pro: entry.pro === true,
+                    proVerifiedAt: entry.proVerifiedAt || 0, until: entry.until == null ? null : entry.until };
+    try {
+      localStorage.setItem(PRO_CACHE_PREFIX + uid, JSON.stringify({
+        pro: proCacheMem.pro, proVerifiedAt: proCacheMem.proVerifiedAt, until: proCacheMem.until }));
+      localStorage.removeItem("wanderPlan:" + uid);       // retire the old, unbounded plan cache
+    } catch(e){ /* ignore */ }
+  }
+  // True while a cached Pro may still be honoured without a fresh server read.
+  function cacheGrantsPro(c, now){
+    if(!c || c.pro !== true) return false;
+    const at = Number(c.proVerifiedAt) || 0;
+    if(at <= 0 || at > now + PRO_CLOCK_SKEW_MS) return false;
+    if(now - at >= PRO_GRACE_MS) return false;
+    if(c.until != null && now >= c.until) return false;   // comp expired since the last read
+    return true;
+  }
+
+  // Firestore Timestamp / RFC 3339 or YYYY-MM-DD string / Unix seconds or millis -> millis.
+  // null when missing or unreadable.
+  function toMillis(v){
+    if(v == null) return null;
+    if(typeof v === "number") return (isFinite(v) && v > 0) ? (v > 1e12 ? v : v * 1000) : null;
+    if(typeof v === "string"){
+      const s = v.trim();
+      if(!s) return null;
+      const t = Date.parse(s);
+      return isNaN(t) ? null : t;
+    }
+    if(v instanceof Date) return isNaN(v.getTime()) ? null : v.getTime();
+    if(typeof v.toMillis === "function"){
+      try { const m = v.toMillis(); return isFinite(m) ? m : null; } catch(e){ return null; }
+    }
+    return null;
+  }
+  // One licence document -> {pro, until}. until = the comp expiry that bounds this grant.
+  // A comp whose expiresAt is missing or unreadable is treated as not expired.
+  function licenseVerdict(data, now){
+    if(!data || !(data.plan === "pro" || data.lifetime === true)) return { pro:false, until:null };
+    if(data.source === "comp"){
+      const exp = toMillis(data.expiresAt);
+      if(exp !== null){
+        if(exp <= now) return { pro:false, until:null };
+        return { pro:true, until:exp };
+      }
+    }
+    return { pro:true, until:null };
+  }
+  // Server-only read (never the SDK's local cache) with a hard timeout. Sync throws
+  // (e.g. an invalid document key) become rejections.
+  function readLicense(key){
+    let timer = null;
+    const timeout = new Promise((_, reject)=>{
+      timer = setTimeout(()=> reject(new Error("licence read timed out")), PRO_READ_TIMEOUT_MS);
+    });
+    const read = Promise.resolve().then(()=> getDocFromServer(doc(db, "licenses", key)));
+    return Promise.race([read, timeout]).finally(()=> clearTimeout(timer));
+  }
+  // -> {status, until}
+  //   "pro"     some doc read from the server grants Pro
+  //   "free"    every doc read succeeded (missing docs included) and none grants Pro
+  //   "unknown" nothing granted Pro and at least one read failed (offline/timeout/auth)
+  async function checkPro(user){
+    const keys = [user.uid];
+    const email = String(user.email || "").trim().toLowerCase();
+    if(email && user.emailVerified === true && email !== user.uid) keys.push(email);
+    const results = await Promise.all(keys.map((key)=> readLicense(key).then(
+      (snap)=> ({ ok:true, data: snap.exists() ? (snap.data() || {}) : null }),
+      ()=> ({ ok:false })
+    )));
+    const now = Date.now();
+    let failed = false, pro = false, unbounded = false, until = 0;
+    for(const r of results){
+      if(!r.ok){ failed = true; continue; }
+      const v = licenseVerdict(r.data, now);
+      if(!v.pro) continue;
+      pro = true;
+      if(v.until === null) unbounded = true; else until = Math.max(until, v.until);
+    }
+    if(pro) return { status:"pro", until: unbounded ? null : until };
+    return { status: failed ? "unknown" : "free", until:null };
+  }
+  // Fold one check result into the cache and return the account Pro to apply.
+  function resolvePro(uid, result){
+    const now = Date.now();
+    if(result.status === "pro"){
+      writeProCache(uid, { pro:true, proVerifiedAt: now, until: result.until });
+      return true;
+    }
+    if(result.status === "free"){
+      writeProCache(uid, { pro:false, proVerifiedAt: 0, until:null });
+      return false;
+    }
+    return cacheGrantsPro(readProCache(uid), now);       // couldn't verify: bounded grace only
   }
 
   const TRIAL_API = "https://wander-payments.wanderlocation.workers.dev";
@@ -5797,25 +5924,68 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     setErr(friendly(e));
   });
 
-  // ---- entitlement check: read licenses/{uid}, fall back to licenses/{lowercased email} ----
-  // Returns "pro" / "free" when Firestore answers authoritatively, or null when
-  // every read failed (offline) so the caller can fall back to the cached plan
-  // instead of wrongly demoting an offline Pro user to "free".
-  async function planFor(user){
-    let reached = false;
+  // ---- Pro re-verification (launch + foreground) ----
+  // The rule and cache policy are documented with readProCache/checkPro above.
+  let accountProNow = false;   // account Pro last applied (before per-device gating)
+  let proLastOkAt   = 0;       // last check whose server reads completed (either answer)
+  let proLastTryAt  = 0;       // last check started (failed checks back off PRO_RETRY_MS)
+  let proCheckBusy  = false;
+
+  async function runProCheck(user){
+    proCheckBusy = true;
+    proLastTryAt = Date.now();
     try {
-      const snap = await getDoc(doc(db, "licenses", user.uid));
-      reached = true;
-      if(snap.exists() && (snap.data() || {}).plan === "pro") return "pro";
-    } catch(e){ /* ignore, try email fallback */ }
-    if(user.email){
-      try {
-        const snap2 = await getDoc(doc(db, "licenses", user.email.toLowerCase()));
-        reached = true;
-        if(snap2.exists()) return (snap2.data() || {}).plan || "free";
-      } catch(e){ /* ignore */ }
+      const result = await checkPro(user);
+      if(result.status !== "unknown") proLastOkAt = Date.now();
+      return resolvePro(user.uid, result);
+    } finally {
+      proCheckBusy = false;
     }
-    return reached ? "free" : null;
+  }
+  function stillSignedInAs(user){ return !!(auth.currentUser && auth.currentUser.uid === user.uid); }
+
+  // Push a resolved account Pro through the same UI/device/sync path as sign-in.
+  function applyAccountPro(isPro){
+    accountProNow = !!isPro;
+    window.wanderAuthState.pro = isPro;
+    if(typeof window.wanderSetPro === "function") window.wanderSetPro(isPro);
+    planPill.textContent = isPro ? "Pro" : "Free plan";
+    planPill.className   = isPro ? "wacct-plan" : "wacct-plan free";
+    if(isPro){ renderTrialLine(null); } else { refreshTrialLine(); }
+    // Register THIS device on top of the resolved account Pro. Fully fail-safe:
+    // any error leaves the Pro state above exactly as-is (see activateDevice).
+    activateDevice(isPro);
+    // Cross-device places sync: reveal the toggle for Pro users and (if opted in)
+    // pull-then-push once on sign-in. Fully fail-safe (see syncNow). Guarded in case
+    // this callback ever fires before the (later-declared) sync module initializes.
+    try{ placesSync.onAuthResolved(isPro); }catch(e){}
+  }
+
+  // Window came back to the front: enforce the offline grace locally (no network),
+  // then re-read the licence at most every 6 hours.
+  function onProForeground(){
+    const user = auth.currentUser;
+    if(!user) return;
+    const now = Date.now();
+    if(accountProNow && !cacheGrantsPro(readProCache(user.uid), now)){
+      applyAccountPro(false);                       // 7-day grace (or a comp's expiresAt) ran out
+    }
+    if(proCheckBusy) return;
+    const sinceOk = now - proLastOkAt, sinceTry = now - proLastTryAt;
+    if(proLastOkAt && sinceOk >= 0 && sinceOk < PRO_RECHECK_MS) return;
+    if(proLastTryAt && sinceTry >= 0 && sinceTry < PRO_RETRY_MS) return;
+    runProCheck(user).then((isPro)=>{
+      if(stillSignedInAs(user) && isPro !== accountProNow) applyAccountPro(isPro);
+    }).catch(()=>{});
+  }
+  window.addEventListener("focus", onProForeground);
+  document.addEventListener("visibilitychange", ()=>{
+    if(document.visibilityState === "visible") onProForeground();
+  });
+
+  // Tells the anonymous usage ping (classic script below) the plan is known.
+  function announcePlanResolved(){
+    try { window.dispatchEvent(new Event("wander:plan-resolved")); } catch(e){}
   }
 
   // ---- auth state -> UI + Pro flip ----
@@ -5828,31 +5998,19 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       emailLbl.title       = user.email || "";
       planPill.textContent = "Checking…";
       planPill.className   = "wacct-plan free";
-      // Offline-safe: if we already know this uid is Pro, flip Pro NOW so the user
-      // is never trial-gated while (or if) the Firestore read is slow/unreachable.
-      if(cachedPlan(user.uid) === "pro"){
+      // Offline-safe: if this uid was verified Pro within the 7-day grace, flip Pro NOW
+      // so the user is never trial-gated while the Firestore read is slow/unreachable.
+      if(cacheGrantsPro(readProCache(user.uid), Date.now())){
         window.wanderAuthState.pro = true;
         if(typeof window.wanderSetPro === "function") window.wanderSetPro(true);
       }
-      const resolved = await planFor(user);
-      // If Firestore couldn't be reached (null), keep the last-known plan rather
-      // than demoting a possibly-Pro user to Free.
-      const plan = (resolved === null) ? (cachedPlan(user.uid) || "free") : resolved;
-      if(resolved !== null) cachePlan(user.uid, resolved);   // only cache authoritative answers
-      const isPro = (plan === "pro");
-      window.wanderAuthState.pro = isPro;
-      if(typeof window.wanderSetPro === "function") window.wanderSetPro(isPro);
-      planPill.textContent = isPro ? "Pro" : "Free plan";
-      planPill.className   = isPro ? "wacct-plan" : "wacct-plan free";
-      if(isPro){ renderTrialLine(null); } else { refreshTrialLine(); }
-      // Register THIS device on top of the resolved account Pro. Fully fail-safe:
-      // any error leaves the Pro state above exactly as-is (see activateDevice).
-      activateDevice(isPro);
-      // Cross-device places sync: reveal the toggle for Pro users and (if opted in)
-      // pull-then-push once on sign-in. Fully fail-safe (see syncNow). Guarded in case
-      // this callback ever fires before the (later-declared) sync module initializes.
-      try{ placesSync.onAuthResolved(isPro); }catch(e){}
+      // Launch / sign-in always re-verifies (the 6-hour throttle is for foreground returns).
+      const isPro = await runProCheck(user);
+      if(!stillSignedInAs(user)) return;           // signed out / switched account mid-check
+      applyAccountPro(isPro);
+      announcePlanResolved();
     } else {
+      accountProNow = false; proLastOkAt = 0; proLastTryAt = 0; proCacheMem = null;
       window.wanderAuthState.signedIn = false;
       window.wanderAuthState.pro = false;
       outBox.style.display = "";
@@ -5866,6 +6024,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       renderDeviceStatusLine(false);
       if(devOverlay && devOverlay.classList.contains("open")) closeDevSheet();
       try{ placesSync.onAuthResolved(false); }catch(e){}   // hide the sync toggle, stop syncing
+      announcePlanResolved();
     }
   });
 
@@ -6087,6 +6246,45 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
       },
     };
   })();
+</script>
+
+<!-- Anonymous usage statistics (no UI, no prompt, no setting). On launch (once the plan is -->
+<!-- known) and whenever the window comes back to the front, tell the LOCAL backend which    -->
+<!-- tier is active. The backend (POST /usage/session in main.py) owns the random install id -->
+<!-- and the persisted 30-minute debounce, and sends one fire-and-forget data point to the   -->
+<!-- Worker. Nothing here is linked to the account: only "free"/"pro" leaves this page.      -->
+<script>
+(function(){
+  var launched = false, lastLocal = 0;
+  var LOCAL_GAP_MS = 60 * 1000;     // collapses focus + visibilitychange double-fires; backend enforces 30 min
+  function tier(){
+    try {
+      return (window.WANDER_PRO === true || document.body.classList.contains('wander-pro')) ? 'pro' : 'free';
+    } catch(e){ return 'free'; }
+  }
+  function ping(){
+    var now = Date.now();
+    if(lastLocal && now - lastLocal >= 0 && now - lastLocal < LOCAL_GAP_MS) return;
+    lastLocal = now;
+    try {
+      var ctl = (typeof AbortController === 'function') ? new AbortController() : null;
+      var timer = ctl ? setTimeout(function(){ try { ctl.abort(); } catch(e){} }, 5000) : null;
+      fetch('/usage/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ t: tier() }),
+        signal: ctl ? ctl.signal : undefined
+      }).then(function(){}, function(){}).then(function(){ if(timer) clearTimeout(timer); });
+    } catch(e){ /* silent */ }
+  }
+  function launch(){ if(launched) return; launched = true; ping(); }
+  window.addEventListener('wander:plan-resolved', launch);
+  setTimeout(launch, 15000);        // account module never resolved (e.g. Firebase CDN unreachable)
+  window.addEventListener('focus', function(){ if(launched) ping(); });
+  document.addEventListener('visibilitychange', function(){
+    if(launched && document.visibilityState === 'visible') ping();
+  });
+})();
 </script>
 
 <!-- Street View teleport — key is fetched from the Worker (Pro + quota) on first open, never bundled -->
