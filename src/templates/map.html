@@ -415,7 +415,7 @@ body.dark-mode .modal-footer button {
   </style>
   <div class="mb-3" id="wtheme-vpn">
     <div class="wtheme-card-title">Match your IP <span class="wvpn-badge">OPTIONAL</span></div>
-    <div class="wvpn-desc">Some apps (dating apps, Pok&eacute;mon GO) cross-check your IP against your GPS. If yours flags a mismatch, run a VPN set to the <b>same country</b> as your spoofed spot.</div>
+    <div class="wvpn-desc">Apps can also estimate where you are from your IP address.</div>
     <a href="https://wanderspoofer.com/vpn/" target="_blank" rel="noopener" class="wvpn-link">How IP matching works &rarr;</a>
   </div>
 
@@ -431,9 +431,9 @@ body.dark-mode .modal-footer button {
     #wtheme-ai .wai-run{width:100%;margin-top:8px;padding:8px;border:none;border-radius:9px;background:#185FA5;color:#fff;font-weight:600;cursor:pointer;display:none}
   </style>
   <div class="mb-3" id="wtheme-ai">
-    <div class="wtheme-card-title">Believable day <span class="wai-pro">PRO</span></div>
+    <div class="wtheme-card-title">Day plan <span class="wai-pro">PRO</span></div>
     <input type="text" id="waiPrompt" placeholder="Describe the day (optional) — e.g. a nurse's shift" style="width:100%;padding:7px 8px;border:1px solid #dbe3ec;border-radius:8px;font-size:12.5px;margin-bottom:6px">
-    <button type="button" id="waiGen" class="wai-btn">&#10024; Generate a believable day</button>
+    <button type="button" id="waiGen" class="wai-btn">&#10024; Generate a day plan</button>
     <div id="waiMsg" class="wai-msg">Describe a day, or leave blank to surprise you. A natural home &rarr; work &rarr; gym routine you can replay.</div>
     <ul id="waiList" class="wai-list"></ul>
     <button type="button" id="waiRun" class="wai-run">&#9654; Replay this day as a route</button>
@@ -502,7 +502,7 @@ body.dark-mode .modal-footer button {
       <input type="number" id="wgeoRadius" class="wgeo-radius" value="120" min="20" max="50000" step="10">
     </div>
     <button type="button" id="wgeoArm" class="wgeo-btn">&#128681; Arm at map center</button>
-    <div id="wgeoMsg" class="wgeo-msg">Center the map on a spot (e.g. home), set a radius, and Arm. When a running route reaches it, spoofing stops and your iPhone returns to its real GPS.</div>
+    <div id="wgeoMsg" class="wgeo-msg">Center the map on a spot (e.g. home), set a radius, and Arm. When a running route reaches it, Wander stops and your iPhone returns to its real GPS.</div>
   </div>
 
   <!-- ===== AI natural-language teleport (Pro, 5/day) — "take me to Times Square" ===== -->
@@ -571,7 +571,7 @@ body.dark-mode .modal-footer button {
     body.wander-dark #wtheme-pogohub .wpgh-task{color:#c4d2e0}
   </style>
   <div class="mb-3" id="wtheme-pogohub">
-    <div class="wtheme-card-title">PoGo Hub</div>
+    <div class="wtheme-card-title">Games hub</div>
     <div class="wpgh-tabs">
       <button type="button" class="wpgh-tab on" data-t="raids">Raids</button>
       <button type="button" class="wpgh-tab" data-t="eggs">Eggs</button>
@@ -640,12 +640,12 @@ body.dark-mode .modal-footer button {
   <div class="mb-3" id="wtheme-sched">
     <div class="wtheme-card-title">Scheduling <span class="wsch-pro">PRO</span></div>
     <div style="font-size:12px;color:#6b7a8c;margin-bottom:6px;line-height:1.4">Auto-start a saved spot or loop at a set time and auto-stop later.</div>
-    <div class="wsch-row"><label class="wsch-lbl">Spoof</label>
+    <div class="wsch-row"><label class="wsch-lbl">Location</label>
       <select id="wschTarget" title="What to run during the window"></select>
     </div>
     <div class="wsch-row"><label class="wsch-lbl">Start</label><input id="wschStart" type="time" title="Auto-start time">
       <label class="wsch-lbl">End</label><input id="wschEnd" type="time" title="Auto-stop time"></div>
-    <div class="wsch-caveat">&#9888;&#65039; Runs in the <b>background</b> while Wander is open — the window can be minimised, and the schedule survives reloads and app restarts. It can't fire while the app is fully <b>quit</b> (desktop spoofing needs Wander running), but it re-arms itself on the next launch.</div>
+    <div class="wsch-caveat">&#9888;&#65039; Runs in the <b>background</b> while Wander is open — the window can be minimised, and the schedule survives reloads and app restarts. It can't fire while the app is fully <b>quit</b> (setting a location from the desktop needs Wander running), but it re-arms itself on the next launch.</div>
     <button type="button" id="wschArm" class="wsch-arm">&#9200; Arm schedule</button>
     <button type="button" id="wschCancel" class="wsch-cancel">&#9632; Cancel schedule</button>
     <div class="wsch-msg" id="wschMsg">Pick a saved spot or loop, set a start &amp; end time, then Arm.</div>
@@ -2952,7 +2952,7 @@ function continueAfterDeveloperModeRequired() {
   <button class="wmode-tbtn" data-mode="two" title="Two-Spot Route">&#8644;</button>
   <button class="wmode-tbtn" data-mode="multi" data-pro="1" title="Multi-Spot Route (Pro)">&#9906;</button>
   <button class="wmode-tbtn" data-mode="joy" title="Joystick">&#9711;</button>
-  <button class="wmode-tbtn" data-mode="pogo" data-pro="1" title="Pok&eacute;mon GO Mode (Pro)">&#127918;</button>
+  <button class="wmode-tbtn" data-mode="pogo" data-pro="1" title="Games mode (Pro)">&#127918;</button>
 </div>
 
 <div class="wmode-card" id="wmodeCard">
@@ -3354,9 +3354,9 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
 <!-- PoGo now opens from the Movement modes toolbar (data-mode="pogo"); FAB removed for one clean surface -->
 <div class="wpogo-scrim" id="wpogoScrim" onclick="wpogoToggle(false)"></div>
 <div class="wpogo-panel" id="wpogoPanel">
-  <div class="wpogo-head"><h3 id="wpogoTitle">Pok&eacute;mon GO Mode</h3><button class="wpogo-close" onclick="wpogoToggle(false)" title="Close (Esc)" aria-label="Close">&times;</button></div>
+  <div class="wpogo-head"><h3 id="wpogoTitle">Games mode</h3><button class="wpogo-close" onclick="wpogoToggle(false)" title="Close (Esc)" aria-label="Close">&times;</button></div>
   <div id="wpogoGameRow" style="padding:2px 0 8px">
-    <select id="wpogoGame" style="width:100%;padding:6px 8px;border:1px solid #dbe3ec;border-radius:8px;font-size:13px;background:#fff" title="Same cooldown engine works for these location games">
+    <select id="wpogoGame" style="width:100%;padding:6px 8px;border:1px solid #dbe3ec;border-radius:8px;font-size:13px;background:#fff" title="The same suggested-wait timer works for these location games">
       <option value="Pok&eacute;mon GO">Pok&eacute;mon GO</option>
       <option value="Monster Hunter Now">Monster Hunter Now</option>
       <option value="Pikmin Bloom">Pikmin Bloom</option>
@@ -3364,10 +3364,10 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     </select>
   </div>
   <div class="wpogo-cd" id="wpogoCd"></div>
-  <label class="wpogo-block" id="wpogoBlockRow" title="Prevent a jump while a soft-ban cooldown is still counting down.">
-    <input type="checkbox" id="wpogoBlock"> Block until cooldown ends
+  <label class="wpogo-block" id="wpogoBlockRow" title="Block a new jump until the suggested wait ends. The wait is only a suggestion; it can't prevent warnings or bans.">
+    <input type="checkbox" id="wpogoBlock"> Block a new jump until the suggested wait ends
   </label>
-  <label class="wpogo-block" id="wpogoGuardRow" title="Warn (never block) when a movement speed is above this game's safe pace.">
+  <label class="wpogo-block" id="wpogoGuardRow" title="Warn (never block) when a movement speed is above this game's suggested pace.">
     <input type="checkbox" id="wpogoGuard"> Speed guardrail (optional)
   </label>
   <div class="wpogo-body" id="wpogoBody">Loading hotspots&hellip;</div>
@@ -3433,8 +3433,8 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     if(cdTimer)clearInterval(cdTimer);
     function tick(){var s=Math.max(0,Math.round((end-Date.now())/1000));
       var m=Math.floor(s/60),ss=('0'+(s%60)).slice(-2);
-      el.innerHTML=s>0?('&#9201; <b>Cooldown '+m+':'+ss+'</b> &mdash; wait this long before catching/spinning to stay soft-ban safe.')
-                      :'&#9989; Cooldown clear &mdash; safe to catch &amp; spin.';
+      el.innerHTML=s>0?('&#9201; <b>Suggested wait '+m+':'+ss+'</b> &mdash; a suggested wait before your next in-game action. Only a suggestion; it can\'t prevent warnings or bans.')
+                      :'&#9989; Suggested wait is over.';
       if(s<=0)clearInterval(cdTimer);}
     tick();cdTimer=setInterval(tick,1000);
   }
@@ -3442,7 +3442,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     var el=document.getElementById('wpogoCd');el.classList.add('on');
     if(cdTimer)clearInterval(cdTimer);
     cdEnd=0;
-    el.innerHTML='&#128640; <b>First jump &mdash; no cooldown yet.</b> Catch &amp; spin freely; cooldown starts on your next jump.';
+    el.innerHTML='&#128640; <b>First jump &mdash; no suggested wait yet.</b> The timer starts on your next jump.';
   }
   window.wpogoTeleport=function(lat,lng){
     if(!deviceConnected()){ toast('Connect your device first'); return; }
@@ -3450,7 +3450,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     var blk=document.getElementById('wpogoBlock');
     if(blk&&blk.checked&&cdEnd>Date.now()){
       var secs=Math.round((cdEnd-Date.now())/1000), mm=Math.floor(secs/60), ss=('0'+(secs%60)).slice(-2);
-      toast('Cooldown active — wait '+mm+':'+ss+' before jumping');
+      toast('Suggested wait active — '+mm+':'+ss+' left before your next jump');
       return;
     }
     if(cur){var km=hav(cur,[lat,lng]);
@@ -3807,7 +3807,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
   // server to pace each leg by its real routing ETA (Realistic ETA button).
   var pacing={two:'flat', multi:'flat'};
 
-  var MODE_TITLES={teleport:'Teleport',jump:'Jump-Teleport',two:'Two-Spot Route',multi:'Multi-Spot Route',joy:'Joystick',pogo:'Pokémon GO Mode'};
+  var MODE_TITLES={teleport:'Teleport',jump:'Jump-Teleport',two:'Two-Spot Route',multi:'Multi-Spot Route',joy:'Joystick',pogo:'Games mode'};
   var PICK_IN={teleport:'wmTelLL',jump:'wmJumpLL',two:'wmTwoLL',multi:'wmMultiLL'}; // where a click fills
 
   // ---- hook Leaflet map (window.map from the main script) ----
@@ -3928,7 +3928,7 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     qsa('.wmode-cbody .pane').forEach(function(p){ p.classList.toggle('on', p.getAttribute('data-pane')==='__locked'); });
     var nm=MODE_TITLES[mode]||'This mode';
     $('wmodeTitle').textContent='🔒 '+nm;
-    var lm=$('wmLockedMsg'); if(lm) lm.textContent=nm+' is a Wander Pro feature. Unlock Pro to walk routes, drive, use the joystick and PoGo Mode.';
+    var lm=$('wmLockedMsg'); if(lm) lm.textContent=nm+' is a Wander Pro feature. Unlock Pro to walk routes, drive, use the joystick and Games mode.';
     var st=$('wmStop'); if(st) st.style.display='none';   // nothing running to stop
     $('wmodeCard').classList.add('open');
     document.body.classList.add('wander-mode-open');
@@ -3953,8 +3953,8 @@ Need help? Please visit <a href="https://wanderspoofer.com" target="_blank">wand
     var kmh=(speeds[key]||0)*3.6;
     if(kmh>cap){
       var game=window.wanderActiveGame?window.wanderActiveGame():'this game';
-      msg(el,'⚠ '+Math.round(kmh)+' km/h is over '+game+'’s safe pace (~'+Math.round(cap)+
-          ' km/h) — you may trip its speed check.',false);
+      msg(el,'⚠ '+Math.round(kmh)+' km/h is over the suggested pace for '+game+' (~'+Math.round(cap)+
+          ' km/h) — the game may react to it.',false);
     }
   }
 
@@ -6868,7 +6868,7 @@ window.WanderOLC=(function(){
   // the AI's own itinerary, mirroring the "Offline routine" badge on iOS/Android.
   function showPlaces(places, offline){
     lastPlaces = places;
-    msg.textContent = offline ? 'Offline — showing a believable day generated on your device.' : '';
+    msg.textContent = offline ? 'Offline — showing a day plan generated on your device.' : '';
     list.innerHTML = places.map(function(p){
       return '<li><span>'+esc(p.label)+' <span style="color:#9aa7b4">'+esc(p.kind)+'</span></span>'+
              '<span style="color:#6b7a8c">'+esc(p.arrive)+(p.depart?('–'+esc(p.depart)):'')+'</span></li>';
@@ -6924,7 +6924,7 @@ window.WanderOLC=(function(){
     if(pts.length<2){ msg.textContent='Not enough points to replay.'; return; }
     fetch('/wander/route',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({points:pts, speed_mps:1.4, loop:'once', realistic:true})})
-      .then(function(){ if(window.wanderToast) window.wanderToast('▶ Replaying your believable day…'); })
+      .then(function(){ if(window.wanderToast) window.wanderToast('▶ Playing your day plan…'); })
       .catch(function(){ if(window.wanderToast) window.wanderToast('Could not start replay.'); });
   });
 })();
@@ -7066,7 +7066,7 @@ window.WanderOLC=(function(){
         if(!s||!s.on){ return; }
         var win=fmtWindow(s.start,s.end);
         msg.textContent = (s.phase==='running')
-          ? '● In window ('+win+') — spoof running. Auto-stops at the end time.'
+          ? '● In window ('+win+') — location running. Auto-stops at the end time.'
           : 'Armed '+win+' — waiting for the start time. Runs while Wander is open.';
       }).catch(function(){});
     }
@@ -7599,13 +7599,13 @@ window.WanderOLC=(function(){
         if(!s || !s.on){ msg.textContent='Could not arm the zone.'; return; }
         armed=true; setBtn(); clearCircle();
         try{ circle=L.circle([c.lat,c.lng],{radius:r,color:'#1c7a3f',weight:2,fillColor:'#1c7a3f',fillOpacity:0.12}).addTo(window.map); }catch(e){}
-        msg.textContent='● Armed: '+Math.round(r)+' m zone. Run a route toward it — spoofing stops on arrival.';
+        msg.textContent='● Armed: '+Math.round(r)+' m zone. Run a route toward it — Wander stops on arrival.';
         stopPoll();
         poll=setInterval(function(){
           fetch('/wander/geofence/get').then(function(r){return r.json();}).then(function(g){
             if(g && g.hit){
               if(window.wanderToast) window.wanderToast('🏁 Reached the zone — reverted to real GPS.');
-              msg.textContent='🏁 Reached the zone — spoofing stopped, iPhone is back on real GPS.';
+              msg.textContent='🏁 Reached the zone — stopped, iPhone is back on real GPS.';
               armed=false; setBtn(); clearCircle(); stopPoll();
             } else if(g && !g.on){
               armed=false; setBtn(); clearCircle(); stopPoll();
@@ -7674,7 +7674,7 @@ window.WanderOLC=(function(){
   };
 
   function apply(){
-    title.textContent = sel.value + ' Mode';
+    title.textContent = 'Games mode';
     try{ localStorage.setItem(KEY, sel.value); }catch(e){}
     window.wpogoRegate();
   }
@@ -7776,7 +7776,7 @@ window.WanderOLC=(function(){
     "Movement modes":  {es:"Modos de movimiento",fr:"Modes de déplacement",de:"Bewegungsmodi",pt:"Modos de movimento",it:"Modalità di movimento",ja:"移動モード",ko:"이동 모드",zh:"移动模式",ru:"Режимы движения"},
     "Local time & weather": {es:"Hora y clima local",fr:"Heure et météo locales",de:"Ortszeit & Wetter",pt:"Hora e clima locais",it:"Ora e meteo locali",ja:"現地時間と天気",ko:"현지 시간 및 날씨",zh:"当地时间和天气",ru:"Местное время и погода"},
     "Match your IP":   {es:"Coincidir tu IP",fr:"Aligner votre IP",de:"IP anpassen",pt:"Combinar seu IP",it:"Allinea il tuo IP",ja:"IPを合わせる",ko:"IP 맞추기",zh:"匹配你的 IP",ru:"Совместить IP"},
-    "Believable day":  {es:"Día realista",fr:"Journée crédible",de:"Glaubwürdiger Tag",pt:"Dia realista",it:"Giornata credibile",ja:"自然な一日",ko:"그럴듯한 하루",zh:"逼真的一天",ru:"Правдоподобный день"},
+    "Day plan":        {es:"Plan del día",fr:"Plan de la journée",de:"Tagesplan",pt:"Plano do dia",it:"Piano della giornata",ja:"一日のプラン",ko:"하루 계획",zh:"一日计划",ru:"План дня"},
     "Saved loops":     {es:"Rutas guardadas",fr:"Boucles enregistrées",de:"Gespeicherte Schleifen",pt:"Ciclos salvos",it:"Percorsi salvati",ja:"保存したループ",ko:"저장된 루프",zh:"已保存循环",ru:"Сохранённые циклы"},
     "Ask to go somewhere": {es:"Pide ir a un lugar",fr:"Demandez où aller",de:"Wohin möchtest du?",pt:"Peça para ir a um lugar",it:"Chiedi dove andare",ja:"行き先を入力",ko:"어디로 갈지 입력",zh:"说出想去的地方",ru:"Куда отправиться"},
     "Raids & eggs today": {es:"Incursiones y huevos hoy",fr:"Raids et œufs du jour",de:"Raids & Eier heute",pt:"Reides e ovos hoje",it:"Raid e uova di oggi",ja:"本日のレイドとタマゴ",ko:"오늘의 레이드와 알",zh:"今日团战与蛋",ru:"Рейды и яйца сегодня"},
@@ -7828,7 +7828,7 @@ window.WanderOLC=(function(){
   #wPanic:disabled{opacity:.6;cursor:default}
   #wPanic svg{width:14px;height:14px}
 </style>
-<button id="wPanic" title="Stop spoofing and revert to your real GPS">
+<button id="wPanic" title="Stop and return to your real GPS">
   <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
   Panic — Real GPS
 </button>
