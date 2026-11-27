@@ -166,7 +166,7 @@ GITHUB_REPO = 'faisal-nabulsi/wander-desktop'
 BROADCAST_FILE = 'BROADCAST'
 # Single source of truth for the desktop app version used by the /update-check
 # route. Bump WANDER_VERSION here AND version in wander-site desktop.json each release.
-WANDER_VERSION = "1.17.1"
+WANDER_VERSION = "1.17.2"
 # Shown in the footer and About panel. Kept equal to WANDER_VERSION so the app
 # reports its real version (it used to say "1.0.0").
 APP_VERSION_NUMBER = WANDER_VERSION
